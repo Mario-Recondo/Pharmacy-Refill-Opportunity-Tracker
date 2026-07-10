@@ -14,7 +14,7 @@ This is a single-user tool. There is no server, no authentication, no multi-user
 
 ### Source system context (PioneerRX)
 
-The pharmacy runs PioneerRX. The technician looks up prescriptions in Pioneer by Rx number (hence the click-to-copy requirement on Rx #). Pioneer can export a CSV report containing, per prescription: `Rx Number`, `Dispensed Item Name`, `Number Of Refills Filled`, `Patient Paid Amount`, `Dispensed Item NDC`, `Days Supply Ends On`, `Net Profit`. That export maps almost 1:1 onto the queue this tool manages and is the basis of the v2 import feature.
+The pharmacy runs PioneerRX. The technician looks up prescriptions in Pioneer by Rx number (hence the click-to-copy requirement on Rx #). Pioneer can export a CSV report; **the technician selects which columns each export contains, so no two files are guaranteed to look the same** (one real sample omitted `Days Supply Ends On` entirely). The full set of columns known to be available today, per prescription: `Rx Number`, `Dispensed Item Name`, `Dispensed Item NDC`, `Days Supply Ends On`, `Patient Paid Amount`, `Net Profit`, `Number Of Refills Filled`, `Primary` (primary insurance), and `Secondary` (secondary coverage — observed values are mostly coupon/copay-assistance programs, e.g. MAYNE, JOURNEY, Opus Health Coupon Plans). That export maps almost 1:1 onto the queue this tool manages and is the basis of the v2 import feature, which must tolerate any subset of these columns.
 
 **Profit is never computed by this tool.** When the technician runs insurance in Pioneer, an adjudication window shows the patient copay, the pharmacy's drug cost, and the net profit. Insurance reimbursement is unpredictable (payers lower/raise reimbursement or drop coverage without warning), so the tool only stores profit values a human verified in Pioneer. "Expected profit" shown in alerts is always the **last verified** profit, explicitly labeled unverified for the current fill.
 
@@ -117,11 +117,13 @@ One row per refill attempt (per prescription per cycle).
 
 The Light Blue group is the uniform Medicare/Medicaid designation; a `is_medicare_medicaid` boolean flag on the row drives that grouping so new Medicare/Medicaid plans automatically inherit the group color. Baby Blue and Light Blue must be visually distinct shades.
 
-`**refill_notes*`* — seeded options (with their meanings, for tooltips):
-`N/A`; `Nimble Link` (payment link sent to patient); `Call Pt` (phone call, typically 65+ patients not comfortable with links); `Faxed for Script` (fax to MD for new Rx when refills exhausted); `Fax not sent` (suppressed to avoid duplicate fax); `TOO SOON TO FILL`; `INS Issue`; `PA Req` (prior authorization required); `TRY AGAIN LATER` (couldn't reach patient); `NO Per Pt` (patient wants verbal authorization, check patient notes). Each has a display color matching the current sheet's color coding.
+`**refill_notes*`* — seeded options exactly as in the sheet's dropdown (with their meanings, for tooltips):
+`Discontinued` (patient or prescriber ended therapy; the row resolves — this is a refill-level state in the source sheet, not a call outcome); `Nimble Link` (payment link sent to patient); `Call Pt` (phone call, typically 65+ patients not comfortable with links); `Faxed for Script` (fax to MD for new Rx when refills exhausted); `Fax not sent` (suppressed to avoid duplicate fax); `TOO SOON TO FILL`; `INS Issue`; `PA Req` (prior authorization required); `TRY AGAIN LATER` (couldn't reach patient); `NO Per Pt` (patient wants verbal authorization, check patient notes). Each has a display color matching the current sheet's color coding.
 
-`**call_notes**` — seeded options:
-`N/A`; `Discontinued`; `D/S` (delivery scheduled by tech via phone); `D/S+AutoRefill`; `P/U` (pickup scheduled); `Nimble IC` (paid via link, wants delivery); `Nimble PickUp` (paid via link, will pick up); `POH PER PT+WCB` (order on hold, patient will call back); `LVM+RSL` (voicemail left, link re-sent); `D/S+RSL` (patient will pay via Nimble later, link re-sent); `VMB FULL+RSL` (voicemail box full, link sent); `VMB NOT SET UP+RSL` (no voicemail set up, link sent). Each with a display color.
+`**call_notes**` — seeded options exactly as in the sheet's dropdown:
+`N/A`; `D/S` (delivery scheduled by tech via phone); `P/U` (pickup scheduled); `Nimble IC` (paid via link, wants delivery); `Nimble PickUp` (paid via link, will pick up); `LVM+RSL` (voicemail left, link re-sent); `D/S+RSL` (patient will pay via Nimble later, link re-sent); `VMB FULL+RSL` (voicemail box full, link sent); `VMB NOT SET UP+RSL` (no voicemail set up, link sent); `POH PER PT+WCB` (order on hold — patient doesn't want it right now, will call back); `PT WCB+RSL` (patient will call back for payment; Nimble link sent just in case). Each with a display color.
+
+The sheet's dropdowns prefix options with numbers (`0.`, `1.` …) purely to force ordering — that hack is replaced by the `sort_order` column; stored names carry no prefixes.
 
 `**settings**` — key/value store for: copay tier thresholds, alert look-ahead days (X), alert minimum profit (Y), last-used CSV column mapping (v2), database backup path.
 
@@ -133,6 +135,8 @@ Explicit workflow status, independent of the notes columns, so "show me everythi
 - `Checked Out` — completed successfully
 - `MISSED` — the refill slipped
 - `$ LOSS` — filled at a loss / negative outcome
+
+Status display colors follow the sheet's legend: `MISSED` dark navy, `$ LOSS` red, `Checked Out` yellow.
 
 `$ LOSS` is a **completed** outcome — the prescription was filled, just unprofitably. "Unresolved" always means `Pending` only, and any counting of completed fills (v3 analytics) must include `$ LOSS` alongside `Checked Out`.
 
@@ -168,17 +172,19 @@ The status field ships in v1 (schema + a status column in the grid) even though 
 
 ### v1 — The Month Tab, done right
 
-1. **Grid view (default screen).** Virtualized, editable data grid of refills for the selected month. Columns: Due date, Insurance (dropdown, colored), Drug, Rx # (click-to-copy), Refill Note (dropdown, colored), Call Note (dropdown, colored, gated), Old Copay, New Copay (tier-colored), Old Profit, New Profit (dynamic green), Status, Notes. Month picker (with data-presence indicators, §3.1); quick filters for day, status, insurance, and "unresolved only." Sortable columns. Rx # (and optionally Drug) pinned so they stay visible and copyable during horizontal scroll (§5, "Floating Rx #").
+1. **Grid view (default screen).** Virtualized, editable data grid of refills for the selected month. Columns: Due date, Insurance (dropdown, colored), Drug, Rx # (click-to-copy), Refill Note (dropdown, colored), Call Note (dropdown, colored, gated), Old Copay, New Copay (tier-colored), Old Profit, New Profit (dynamic green), Status, Notes. Month picker (with data-presence indicators, §3.1); quick filters for day, status, insurance, and "unresolved only." Sortable columns. Rx # (and optionally Drug) pinned so they stay visible and copyable during horizontal scroll (§5, "Floating Rx #") — the current sheet literally duplicates the RX column on the far right as a manual workaround, so this is a proven daily need. Within the month view, day boundaries get a visible separator between date groups (the sheet marks them with colored divider lines — a scanning habit worth preserving).
 2. **Detail drawer.** Clicking a row opens a side drawer: all fields editable in form layout, plus **history** — previous refill rows for the same Rx (and same drug, by NDC/name rule) across all months with their dates, profits, and outcomes.
 3. **Manual entry.** "Add refill" opens the same drawer in create mode. Drug field autocompletes against the `drugs` table and creates a new drug if unmatched.
 4. **Opportunities panel.** A collapsible panel (see UI sketching phase) listing refills where `due_date` is within X days AND last verified profit (`old_profit`) ≥ $Y AND status is `Pending` AND `new_profit` is still empty — once the technician enters a verified new profit, the card leaves the panel. Sorted by last profit descending. Each card: drug, Rx # (copyable), due date, last profit, current refill note. Clicking a card jumps to/opens that row. X and Y live in Settings (sensible seeds: X = 3 days, Y = $50).
 5. **Overdue view.** A dedicated tab listing, across **all** months, rows whose due date has passed while still `Pending`, plus rows marked `MISSED` — so slipped work stays visible without polluting the day/month view the technician is working. Rows open and edit exactly like grid rows; resolving a row removes it from the tab. A per-row "add to today's call list" action ships alongside the Call List (v3). No schema impact — it is a filter over the same refills table.
-6. **Settings.** Manage insurances (with colors and the Medicare/Medicaid flag), refill notes, call notes, copay tiers, alert thresholds, database backup/restore. Insurance assignment on rows is always a manual step: the Pioneer export carries no insurance column, so the technician sets it from the colored dropdown per row.
+6. **Settings.** Manage insurances (with colors and the Medicare/Medicaid flag), refill notes, call notes, copay tiers, alert thresholds, database backup/restore. In v1, insurance on rows is set manually from the colored dropdown; in v2, imports pre-fill it from the export's `Primary` column when that column is present (fill-blanks-only, like every imported field).
 
 ### v2 — CSV Import
 
+- **Exports are column-configurable (§1).** The wizard maps whichever known columns are present in the file and ignores the rest; only `Rx Number` is strictly required. A file with no `Days Supply Ends On` column routes every row through the blank-due-date bulk-assignment path below — the import still works.
 - Import wizard: choose file → column-mapping step (tool proposes mappings for the known Pioneer headers; user can adjust; mapping persisted in settings) → preview with per-row disposition (new / update / skip) → commit.
-- Mapping targets: `Rx Number → rx_number`, `Dispensed Item Name → drug name`, `Dispensed Item NDC → drug ndc`, `Days Supply Ends On → due_date`, `Patient Paid Amount → old_copay`, `Net Profit → old_profit`, `Number Of Refills Filled → refills_filled`.
+- Mapping targets: `Rx Number → rx_number`, `Dispensed Item Name → drug name`, `Dispensed Item NDC → drug ndc`, `Days Supply Ends On → due_date`, `Patient Paid Amount → old_copay`, `Net Profit → old_profit`, `Number Of Refills Filled → refills_filled`, `Primary → insurance`. `Secondary` has no mapping target yet (open question §8).
+- **Primary → insurance matching is case-insensitive** (exports use `CVS CAREMARK`, `RIGHTWAY`; the insurances list has `CVS Caremark`, `RightWay`). Values that match no existing insurance (e.g. `VILLAGE RX LOCAL`, `Magellan` in real samples) surface in the preview for the technician to map to an existing insurance, create as a new one, or leave blank — never guessed silently.
 - Upsert semantics per §5. Rows with unparseable dates or missing Rx numbers go to a reviewable error list, never silently dropped.
 - **Probable-duplicate detection (due-date drift).** `Days Supply Ends On` can shift between overlapping exports for the same refill cycle, so exact `(rx_number, due_date)` matching alone would create duplicates. A parsed row whose Rx # matches an existing `Pending` row with a *nearby but different* due date is flagged in the preview as a probable duplicate with a warning; the technician chooses per row: update the existing row (adopting the new due date) or override and insert as a genuinely new row. Never silently inserted.
 - **Bulk-fix for blank due dates.** In the error list, the technician can multi-select rows with a blank `Days Supply Ends On` and apply a single due date to all of them at once — or skip them, individually or in bulk.
@@ -200,6 +206,7 @@ The status field ships in v1 (schema + a status column in the grid) even though 
 
 1. Call List as separate page vs. day-filter on the month grid — awaiting technician preference (v3 decision).
 2. Whether `$ LOSS` should auto-suggest when a negative `new_profit` is entered (proposed: yes, as a prompt, never automatic).
-3. Seed color for the **LP** insurance value — not specified in the source sheet's palette; assign during implementation (editable in Settings regardless).
+3. **What is LP?** The design previously treated LP as an insurance value needing a seed color, but LP does not appear in the sheet's insurance dropdown, and the sheet's legend defines "LP NA" as "Last Processed but never checked out" — which sounds like a workflow state, not a payer. Confirm with the technician what LP is and where it belongs (possibly not in `insurances` at all).
 4. Compound drugs (no NDC) are matched by exact name string, and Pioneer name strings can drift (spacing, vendor suffixes), which would create duplicate `drugs` rows. Accepted for now — fuzzy/normalized name matching is deferred until it proves to be a problem in practice.
+5. What should imports do with the `Secondary` export column? Observed values are coupon/copay-assistance programs (MAYNE, JOURNEY, Opus Health Coupon Plans, Mckesson Loyalty…), not insurances. No schema home today; candidates: ignore it, add a `secondary_coverage` text column, or append to the row's notes.
 

@@ -12,6 +12,7 @@ As a technician, I want to open the app and see the current month's refill queue
 Acceptance criteria:
 - On launch, the grid shows refills whose due date falls in the current calendar month, sorted by due date ascending.
 - A month picker lets me switch to any past or future month; months containing rows are visually distinguished (with a row count) from empty months.
+- Day boundaries within the month are visually separated (matching the divider lines the current sheet uses between dates).
 - Navigating to an empty month shows an empty state with "Add refill" (and, in v2, "Import CSV") — never a bare blank grid.
 
 **1.2 — Filter to what needs attention**
@@ -156,7 +157,9 @@ As a technician, I want the tool to be a single .exe I double-click, so that I d
 As a technician, I want to import the monthly PioneerRX CSV export, so that the month's queue builds itself with due dates, old copays, and old profits pre-filled.
 
 Acceptance criteria:
-- I choose a file and see a column-mapping step; known Pioneer headers (Rx Number, Dispensed Item Name, Dispensed Item NDC, Days Supply Ends On, Patient Paid Amount, Net Profit, Number Of Refills Filled) are pre-mapped, and the mapping is remembered for next time.
+- I choose a file and see a column-mapping step; known Pioneer headers (Rx Number, Dispensed Item Name, Dispensed Item NDC, Days Supply Ends On, Patient Paid Amount, Net Profit, Number Of Refills Filled, Primary, Secondary) are pre-mapped, and the mapping is remembered for next time.
+- Exports contain whichever columns I selected in Pioneer; the import works with any subset (only Rx Number is required). A file with no due-date column sends all its rows through the blank-due-date bulk-assignment step instead of failing.
+- When a Primary column is present, it fills the Insurance field on rows where it's blank, matched case-insensitively against my insurances list; unmatched names are surfaced for me to map to an existing insurance, create as new, or leave blank — never guessed.
 - A preview shows each row's disposition — new, update, or skip — before anything is written.
 - Rows with a missing Rx # or unparseable date land in a reviewable error list; nothing is silently dropped.
 - In the error list, I can multi-select rows with a blank due date and apply one due date to all of them at once, or skip them individually or in bulk.

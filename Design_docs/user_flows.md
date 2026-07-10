@@ -46,7 +46,7 @@ This is the flow the technician repeats dozens of times a day. Entry points: a c
      - Yes → Refill Note = `Fax not sent` (duplicate-fax prevention).
    - E2. Row stays `Pending`; when the new script arrives it re-enters at step 2. (Note: a *renewal* may arrive under a **new Rx number** — that becomes a new row; history intentionally does not bridge it. See design doc §5.)
 
-   **Branch F: Patient declines / defers.** Refill Note = `NO Per Pt` (wants verbal authorization; check patient notes) — or the deferral surfaces during contact, handled in Flow 2.1.
+   **Branch F: Patient declines / defers.** Refill Note = `NO Per Pt` (wants verbal authorization; check patient notes) — or the deferral surfaces during contact, handled in Flow 2.1. If therapy is ended outright (patient or prescriber discontinued it) → Refill Note = `Discontinued`; the row resolves — no further fills expected.
 
    **Branch G: Negative or unacceptable profit.** Technician may still fill (business decision made outside the tool). If filled at a loss: enter the negative New Profit → tool prompts "Mark as $ LOSS?" → confirm or decline.
 
@@ -58,11 +58,12 @@ This is the flow the technician repeats dozens of times a day. Entry points: a c
 Only reachable when Refill Note is `Nimble Link` or `Call Pt`.
 
 1. **Decision — did you reach the patient?**
-   - **Reached, arranges delivery** → `D/S` (or `D/S+AutoRefill` if enrolling in auto-refill).
+   - **Reached, arranges delivery** → `D/S`.
    - **Reached, will pick up** → `P/U`.
    - **Reached, will pay via Nimble later** → `D/S+RSL` (link re-sent).
-   - **Reached, wants to hold** → `POH PER PT+WCB` (patient will call back). Row parks.
-   - **Reached, prescription no longer wanted/valid** → `Discontinued`. Row resolves (typically no further fill).
+   - **Reached, wants to hold** → `POH PER PT+WCB` (doesn't want it right now, will call back). Row parks.
+   - **Reached, will call back to pay** → `PT WCB+RSL` (Nimble link sent just in case). Row parks.
+   - **Reached, prescription no longer wanted/valid** → set *Refill Note* = `Discontinued` (a refill-level state, not a call note). Row resolves (typically no further fill).
    - **Voicemail left** → `LVM+RSL` (link re-sent).
    - **Voicemail full** → `VMB FULL+RSL`.
    - **No voicemail set up** → `VMB NOT SET UP+RSL`.
@@ -135,7 +136,7 @@ The month-rollover ritual, replacing "clone the tab."
 
 1. `[Pioneer]` Around month start, technician exports the refill report CSV.
 2. In the tool: **Import CSV** (toolbar or empty-month state) → file picker.
-3. **Mapping step:** known Pioneer headers arrive pre-mapped (remembered from last time); technician confirms or adjusts. First-ever import: tool proposes mappings by header-name match; technician verifies once.
+3. **Mapping step:** known Pioneer headers arrive pre-mapped (remembered from last time); technician confirms or adjusts. First-ever import: tool proposes mappings by header-name match; technician verifies once. Exports contain whichever columns the technician selected in Pioneer — the wizard maps the known columns present and ignores the rest (only Rx Number is required; a file with no due-date column sends every row to the bulk-date step in 6).
 4. **Preview step:** table of parsed rows, each tagged **New** / **Update** (fills blanks only) / **Skip** (no change) / **Probable duplicate** (same Rx # as an existing `Pending` row with a nearby-but-different due date — due dates drift between overlapping exports; technician chooses per row: update the existing row or override and create new) / **Error** (missing Rx #, unparseable date).
 5. Technician clicks **Commit**.
 6. Result screen: counts per disposition; error rows listed for manual review → each error can be fixed via Flow 4 (manual add) using the displayed raw values. Rows with a blank due date can be **multi-selected** to apply a single due date to all at once — or skipped, individually or in bulk.
