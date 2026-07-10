@@ -1,0 +1,7 @@
+# Local working notes
+QUESTIONS.md
+
+# Dependencies / build output (for when the app scaffold lands)
+node_modules/
+dist/
+src-tauri/target/
