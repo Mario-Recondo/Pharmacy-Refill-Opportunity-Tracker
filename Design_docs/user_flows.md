@@ -51,7 +51,7 @@ This is the flow the technician repeats dozens of times a day. Entry points: a c
    **Branch G: Negative or unacceptable profit.** Technician may still fill (business decision made outside the tool). If filled at a loss: enter the negative New Profit → tool prompts "Mark as $ LOSS?" → confirm or decline.
 
 4. End states for any pass through this flow: the row is either **resolved** (`Checked Out`, `$ LOSS`) or **parked with a reason** (still `Pending`, with a Refill Note explaining why). A row should never be left `Pending` with no note — the grid's "unresolved" filter is the safety net that surfaces these.
-5. If the due date passes without resolution → technician sets **Status = MISSED** (v1: manual; a future enhancement may flag overdue `Pending` rows automatically).
+5. If the due date passes without resolution → technician sets **Status = MISSED** (v1: manual; a future enhancement may flag overdue `Pending` rows automatically). Overdue `Pending` rows and `MISSED` rows surface automatically in the **Overdue tab** (Flow 8), so slipped work stays visible without hunting through past months.
 
 ### Flow 2.1: Contact Outcome (Call Note)
 
@@ -136,9 +136,9 @@ The month-rollover ritual, replacing "clone the tab."
 1. `[Pioneer]` Around month start, technician exports the refill report CSV.
 2. In the tool: **Import CSV** (toolbar or empty-month state) → file picker.
 3. **Mapping step:** known Pioneer headers arrive pre-mapped (remembered from last time); technician confirms or adjusts. First-ever import: tool proposes mappings by header-name match; technician verifies once.
-4. **Preview step:** table of parsed rows, each tagged **New** / **Update** (fills blanks only) / **Skip** (no change) / **Error** (missing Rx #, unparseable date).
+4. **Preview step:** table of parsed rows, each tagged **New** / **Update** (fills blanks only) / **Skip** (no change) / **Probable duplicate** (same Rx # as an existing `Pending` row with a nearby-but-different due date — due dates drift between overlapping exports; technician chooses per row: update the existing row or override and create new) / **Error** (missing Rx #, unparseable date).
 5. Technician clicks **Commit**.
-6. Result screen: counts per disposition; error rows listed for manual review → each error can be fixed via Flow 4 (manual add) using the displayed raw values.
+6. Result screen: counts per disposition; error rows listed for manual review → each error can be fixed via Flow 4 (manual add) using the displayed raw values. Rows with a blank due date can be **multi-selected** to apply a single due date to all at once — or skipped, individually or in bulk.
 7. Rows land in months per their own due dates — a mid-July export containing early-August rows populates both months in one import. No "month setup" exists.
 8. Safety property: committing the same file twice → second commit reports "0 new, 0 updated." Re-import is always safe (never touches technician-entered fields).
 
@@ -163,6 +163,17 @@ The month-rollover ritual, replacing "clone the tab."
 **7c. Backup:** Settings → **Back up** → choose folder → timestamped copy of the `.db` file written. Recommended habit: monthly, right after import.
 
 **7d. Restore:** Settings → **Restore** → choose backup file → explicit confirmation ("replaces ALL current data") → app reloads on restored data.
+
+---
+
+## Flow 8: Clearing Overdue Work
+
+1. Technician opens the **Overdue** tab.
+2. The list shows, across **all** months: `Pending` rows whose due date has passed, plus `MISSED` rows — oldest first. The current day/month grid is never polluted by these; this tab is their home.
+3. Per row, decision — still worth pursuing?
+   - Yes → work it via Flow 2 (Rx # copy works here like everywhere else). In v3, an **"add to today's call list"** action pulls the row into the current daily queue instead of working it immediately.
+   - No → set **Status = MISSED** (or leave as MISSED). The row remains in the tab as a MISSED record until reopened or the technician filters it out.
+4. Resolving a row (`Checked Out`, `$ LOSS`) removes it from the tab.
 
 ---
 
@@ -193,6 +204,6 @@ Rules of thumb encoded above:
 
 ## Cross-Flow Invariants
 
-- The clipboard Rx # (Flow 2, step 1) must work from every surface that shows an Rx #: grid (pinned column), Opportunities card, detail drawer, history entries.
+- The clipboard Rx # (Flow 2, step 1) must work from every surface that shows an Rx #: grid (pinned column), Opportunities card, detail drawer, history entries, Overdue tab.
 - No flow contains a "Save" step for field edits — persistence is immediate everywhere; explicit confirmation exists only for destructive/irreversible actions (restore, call-note clearing, import commit).
 - Every flow that parks a row leaves a note explaining *why* it's parked; the "unresolved" filter is the recurring re-entry point for all parked work.

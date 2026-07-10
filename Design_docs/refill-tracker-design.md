@@ -26,11 +26,11 @@ The pharmacy runs PioneerRX. The technician looks up prescriptions in Pioneer by
 | Shell / packaging | **Tauri 2.x**                                                                                  | Ships a small (~10 MB) single .exe; native webview; far lighter than Electron for a one-user tool                         |
 | UI                | **React + TypeScript**                                                                         | The UI is essentially a smart spreadsheet grid + dashboard panels — web tech's home turf                                  |
 | Grid              | A capable data-grid library (e.g., TanStack Table with virtualized rows, or AG Grid Community) | Inline editing, dropdown cell editors, conditional cell styling, column filtering                                         |
-| Storage           | **SQLite** via Tauri's SQL plugin (or rusqlite on the Rust side)                               | Single local `.db` file; durable; makes month filtering and cross-month analytics trivial queries; backup = copy the file |
+| Storage           | **SQLite** via Tauri's SQL plugin (or rusqlite on the Rust side)                               | Single local `.db` file; durable; makes month filtering and cross-month analytics trivial queries; easy snapshot backups |
 | Charts (later)    | Recharts or similar                                                                            | Only needed for v3 analytics                                                                                              |
 
 
-The database file lives in the OS app-data directory (e.g., `%APPDATA%/RefillTracker/refills.db`). A Settings screen shows the file path and offers a one-click "Back up database" (copy to user-chosen location) and "Restore from backup."
+The database file lives in the OS app-data directory (e.g., `%APPDATA%/RefillTracker/refills.db`). A Settings screen shows the file path and offers a one-click "Back up database" (to a user-chosen location) and "Restore from backup." Backups are taken via SQLite's backup API or `VACUUM INTO` so they are consistent snapshots even while the app is running — never a raw file copy of the live database, which can capture a mid-write (corrupt or stale) state.
 
 ## 3. Core Architectural Decision: Months Are Data, Not Structure
 
@@ -134,6 +134,8 @@ Explicit workflow status, independent of the notes columns, so "show me everythi
 - `MISSED` — the refill slipped
 - `$ LOSS` — filled at a loss / negative outcome
 
+`$ LOSS` is a **completed** outcome — the prescription was filled, just unprofitably. "Unresolved" always means `Pending` only, and any counting of completed fills (v3 analytics) must include `$ LOSS` alongside `Checked Out`.
+
 The status field ships in v1 (schema + a status column in the grid) even though the dedicated Call List workflow for setting statuses is deferred — adding UI later is cheap, retrofitting a status column after months of data is not.
 
 ## 5. Business Rules
@@ -152,9 +154,9 @@ The status field ships in v1 (schema + a status column in the grid) even though 
 | $300+             | red          |
 
 
-**Profit color tiers (dynamic).** Old Profit and New Profit cells shade green with intensity **relative to the current dataset**: the maximum profit in the visible month sets the brightest green; lower values scale to lighter shades. (In the sheet this was approximated with manual tiers; in code, compute shade from `value / max(visible profits)` with a floor so small positive profits are still visibly green.) Negative or zero profit gets a distinct treatment (e.g., red/grey).
+**Profit color tiers (dynamic).** Old Profit and New Profit cells shade green with intensity **relative to the rows currently visible on screen** — the active filter set, not a fixed scale. The maximum profit among visible rows sets the brightest green; lower values scale to lighter shades. When the visible set changes, shades recompute: filtered to July 3rd, shading is relative to July 3rd's profits; widen to the full month and every cell re-shades relative to the whole month. (In the sheet this was approximated with manual tiers; in code, compute shade from `value / max(visible profits)` with a floor so small positive profits are still visibly green.) Negative or zero profit gets a distinct treatment (e.g., red/grey).
 
-**Profit is verified, never predicted.** `new_profit` and `new_copay` are entered manually by the technician after running insurance in Pioneer. Anywhere the UI shows an expected value (Opportunities panel), it must display the last verified profit and label it "last fill" / "unverified."
+**Profit is verified, never predicted.** `new_profit` and `new_copay` are entered manually by the technician after running insurance in Pioneer. Anywhere the UI shows an expected value (Opportunities panel), it must display the last verified profit and label it "last fill" / "unverified." **"Last verified profit" is the row's `old_profit`** — what the pharmacy actually earned the last time this prescription was sold. `new_profit` stays empty until the technician runs insurance and enters what Pioneer reports; once entered, the row joins the verified rows for its day/month.
 
 **Import never overwrites human work** (v2 rule, but shapes v1 schema): upsert on `(rx_number, due_date)`; imported values fill NULL fields only; fields the technician already populated are left untouched.
 
@@ -169,14 +171,17 @@ The status field ships in v1 (schema + a status column in the grid) even though 
 1. **Grid view (default screen).** Virtualized, editable data grid of refills for the selected month. Columns: Due date, Insurance (dropdown, colored), Drug, Rx # (click-to-copy), Refill Note (dropdown, colored), Call Note (dropdown, colored, gated), Old Copay, New Copay (tier-colored), Old Profit, New Profit (dynamic green), Status, Notes. Month picker (with data-presence indicators, §3.1); quick filters for day, status, insurance, and "unresolved only." Sortable columns. Rx # (and optionally Drug) pinned so they stay visible and copyable during horizontal scroll (§5, "Floating Rx #").
 2. **Detail drawer.** Clicking a row opens a side drawer: all fields editable in form layout, plus **history** — previous refill rows for the same Rx (and same drug, by NDC/name rule) across all months with their dates, profits, and outcomes.
 3. **Manual entry.** "Add refill" opens the same drawer in create mode. Drug field autocompletes against the `drugs` table and creates a new drug if unmatched.
-4. **Opportunities panel.** A collapsible panel (see UI sketching phase) listing refills where `due_date` is within X days AND last verified profit ≥ $Y AND status is `Pending`, sorted by last profit descending. Each card: drug, Rx # (copyable), due date, last profit, current refill note. Clicking a card jumps to/opens that row. X and Y live in Settings (sensible seeds: X = 3 days, Y = $50).
-5. **Settings.** Manage insurances (with colors and the Medicare/Medicaid flag), refill notes, call notes, copay tiers, alert thresholds, database backup/restore.
+4. **Opportunities panel.** A collapsible panel (see UI sketching phase) listing refills where `due_date` is within X days AND last verified profit (`old_profit`) ≥ $Y AND status is `Pending` AND `new_profit` is still empty — once the technician enters a verified new profit, the card leaves the panel. Sorted by last profit descending. Each card: drug, Rx # (copyable), due date, last profit, current refill note. Clicking a card jumps to/opens that row. X and Y live in Settings (sensible seeds: X = 3 days, Y = $50).
+5. **Overdue view.** A dedicated tab listing, across **all** months, rows whose due date has passed while still `Pending`, plus rows marked `MISSED` — so slipped work stays visible without polluting the day/month view the technician is working. Rows open and edit exactly like grid rows; resolving a row removes it from the tab. A per-row "add to today's call list" action ships alongside the Call List (v3). No schema impact — it is a filter over the same refills table.
+6. **Settings.** Manage insurances (with colors and the Medicare/Medicaid flag), refill notes, call notes, copay tiers, alert thresholds, database backup/restore. Insurance assignment on rows is always a manual step: the Pioneer export carries no insurance column, so the technician sets it from the colored dropdown per row.
 
 ### v2 — CSV Import
 
 - Import wizard: choose file → column-mapping step (tool proposes mappings for the known Pioneer headers; user can adjust; mapping persisted in settings) → preview with per-row disposition (new / update / skip) → commit.
 - Mapping targets: `Rx Number → rx_number`, `Dispensed Item Name → drug name`, `Dispensed Item NDC → drug ndc`, `Days Supply Ends On → due_date`, `Patient Paid Amount → old_copay`, `Net Profit → old_profit`, `Number Of Refills Filled → refills_filled`.
 - Upsert semantics per §5. Rows with unparseable dates or missing Rx numbers go to a reviewable error list, never silently dropped.
+- **Probable-duplicate detection (due-date drift).** `Days Supply Ends On` can shift between overlapping exports for the same refill cycle, so exact `(rx_number, due_date)` matching alone would create duplicates. A parsed row whose Rx # matches an existing `Pending` row with a *nearby but different* due date is flagged in the preview as a probable duplicate with a warning; the technician chooses per row: update the existing row (adopting the new due date) or override and insert as a genuinely new row. Never silently inserted.
+- **Bulk-fix for blank due dates.** In the error list, the technician can multi-select rows with a blank `Days Supply Ends On` and apply a single due date to all of them at once — or skip them, individually or in bulk.
 - Handle quirks observed in real exports: blank NDC (compounds), blank `Days Supply Ends On`, duplicate drug names differing only by NDC (e.g., Ycanth under two NDCs — these are distinct `drugs` rows).
 
 ### v3 — Call List & Analytics
@@ -196,4 +201,5 @@ The status field ships in v1 (schema + a status column in the grid) even though 
 1. Call List as separate page vs. day-filter on the month grid — awaiting technician preference (v3 decision).
 2. Whether `$ LOSS` should auto-suggest when a negative `new_profit` is entered (proposed: yes, as a prompt, never automatic).
 3. Seed color for the **LP** insurance value — not specified in the source sheet's palette; assign during implementation (editable in Settings regardless).
+4. Compound drugs (no NDC) are matched by exact name string, and Pioneer name strings can drift (spacing, vendor suffixes), which would create duplicate `drugs` rows. Accepted for now — fuzzy/normalized name matching is deferred until it proves to be a problem in practice.
 

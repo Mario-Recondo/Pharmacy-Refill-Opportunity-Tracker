@@ -53,6 +53,16 @@ Acceptance criteria:
 - Status is editable in the grid and the detail drawer.
 - New rows default to `Pending`.
 - Entering a negative New Profit prompts (but never forces) marking the row `$ LOSS`.
+- `$ LOSS` counts as completed work (the fill happened); only `Pending` rows count as unresolved.
+
+**1.7 — Keep overdue work visible**
+As a technician, I want an Overdue tab showing all overdue and MISSED refills across every month, so that slipped prescriptions stay visible without cluttering the day or month I'm working.
+
+Acceptance criteria:
+- The tab lists every row whose due date has passed while status is `Pending`, plus all `MISSED` rows, regardless of which month they belong to.
+- Rows open, edit, and resolve exactly like grid rows; resolving a row removes it from the tab.
+- The month/day grid views are unaffected — overdue rows from other months never bleed into them.
+- (v3, with the Call List) Each row offers an "add to today's call list" action to pull it into the current queue.
 
 ---
 
@@ -94,17 +104,19 @@ Acceptance criteria:
 - Changing thresholds in Settings recolors existing data immediately.
 
 **3.2 — Profit shading that highlights the big ones**
-As a technician, I want profit cells shaded greener the higher the profit relative to the month, so that the most lucrative fills are obvious.
+As a technician, I want profit cells shaded greener the higher the profit relative to what's on my screen, so that the most lucrative fills are obvious.
 
 Acceptance criteria:
-- Shade intensity scales relative to the maximum profit in the visible month, with a floor so small positive profits still read as green.
+- Shade intensity scales relative to the maximum profit among the rows currently visible (the active day/month filter), with a floor so small positive profits still read as green.
+- Changing the visible set recomputes the shades: filtered to July 3rd, shading is relative to that day; the full month view shades relative to the whole month.
 - Zero/negative profits use a distinct non-green treatment.
 
 **3.3 — Get alerted to high-value refills coming due**
 As a technician, I want a panel listing refills due soon whose last verified profit was high, so that I work the most valuable prescriptions first and never let one slip to MISSED.
 
 Acceptance criteria:
-- The panel lists rows where due date is within X days, last verified profit ≥ $Y, and status is `Pending`, sorted by last profit descending. X and Y are editable in Settings.
+- The panel lists rows where due date is within X days, last verified profit ≥ $Y, status is `Pending`, and New Profit is still empty, sorted by last profit descending. X and Y are editable in Settings.
+- "Last verified profit" is the row's `old_profit` — what the pharmacy earned the last time this prescription was sold.
 - Each card shows drug, Rx # (copyable), due date, last profit clearly labeled as "last fill / unverified," and the current refill note.
 - Clicking a card opens that row's detail drawer.
 - A card leaves the panel when its row gains a verified New Profit or leaves `Pending`.
@@ -129,7 +141,8 @@ As a technician, I want one-click backup and restore of the database, so that a 
 
 Acceptance criteria:
 - Settings shows the database file location.
-- "Back up" copies the database to a chosen folder; "Restore" replaces current data from a chosen backup after an explicit confirmation.
+- "Back up" writes a timestamped copy of the database to a chosen folder; "Restore" replaces current data from a chosen backup after an explicit confirmation.
+- Backups are consistent snapshots taken safely while the app is running (SQLite backup API or `VACUUM INTO`), never a raw copy of the live file.
 - Everything I enter is saved as I type; force-closing the app loses at most the cell currently being edited.
 
 **4.4 — Just open it**
@@ -146,6 +159,7 @@ Acceptance criteria:
 - I choose a file and see a column-mapping step; known Pioneer headers (Rx Number, Dispensed Item Name, Dispensed Item NDC, Days Supply Ends On, Patient Paid Amount, Net Profit, Number Of Refills Filled) are pre-mapped, and the mapping is remembered for next time.
 - A preview shows each row's disposition — new, update, or skip — before anything is written.
 - Rows with a missing Rx # or unparseable date land in a reviewable error list; nothing is silently dropped.
+- In the error list, I can multi-select rows with a blank due date and apply one due date to all of them at once, or skip them individually or in bulk.
 - Rows land in months according to their own due dates, even if the file spans a month boundary.
 
 **5.2 — Re-import without fear**
@@ -154,6 +168,7 @@ As a technician, I want re-importing an overlapping file to be safe, so that I n
 Acceptance criteria:
 - Matching is by Rx # + due date; imports fill only empty fields and never overwrite values I entered (refill/call notes, new copay/profit, status, notes are untouchable by import).
 - Importing the same file twice produces zero changes the second time.
+- A row whose Rx # matches an existing `Pending` row with a nearby-but-different due date is flagged as a probable duplicate (due dates drift between exports); I choose per row whether to update the existing row or override and create a new one — it is never inserted silently.
 
 ---
 
