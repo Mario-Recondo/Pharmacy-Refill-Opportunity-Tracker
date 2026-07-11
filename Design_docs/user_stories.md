@@ -14,6 +14,7 @@ Acceptance criteria:
 - A month picker lets me switch to any past or future month; months containing rows are visually distinguished (with a row count) from empty months.
 - Day boundaries within the month are visually separated (matching the divider lines the current sheet uses between dates).
 - Navigating to an empty month shows an empty state with "Add refill" (and, in v2, "Import CSV") — never a bare blank grid.
+- Columns sort on header click; a one-click "Reset sort" control restores the default due-date order.
 
 **1.2 — Filter to what needs attention**
 As a technician, I want quick filters for day, status, insurance, and "unresolved only," so that I can focus on today's work or find what's slipping.
