@@ -30,7 +30,7 @@ Acceptance criteria:
 As a technician, I want to edit any field inline in the grid, so that logging my work is as fast as it was in Google Sheets.
 
 Acceptance criteria:
-- Insurance, Refill Note, Call Note, and Status cells edit via dropdowns showing each option in its designated color.
+- Insurance, Refill Note, Call Note, and Status cells edit via dropdowns showing each option in its designated color; a dropdown opens on a single click.
 - Copay and profit cells accept numeric entry; cell colors update immediately per the tier rules.
 - Edits persist to the database immediately (no Save button, no data loss on crash or close).
 - Tab/arrow-key navigation between cells works, so the keyboard-heavy Sheets workflow carries over.
@@ -50,13 +50,13 @@ Acceptance criteria:
 - If I change a refill note away from a qualifying value while a call note exists, I'm prompted before the call note is cleared (no silent wipe).
 
 **1.6 — Mark a row's outcome**
-As a technician, I want to set a status (Pending, Checked Out, MISSED, $ LOSS) on each refill, so that I can tell finished work from open work at a glance.
+As a technician, I want to set a status (Pending, Checked Out, MISSED) on each refill, so that I can tell finished work from open work at a glance.
 
 Acceptance criteria:
 - Status is editable in the grid and the detail drawer.
 - New rows default to `Pending`.
-- Entering a negative New Profit prompts (but never forces) marking the row `$ LOSS`.
-- `$ LOSS` counts as completed work (the fill happened); only `Pending` rows count as unresolved.
+- A fill completed at a loss is `Checked Out` with a negative New Profit — the red profit cell flags it; there is no separate loss status (`$ LOSS` removed per technician feedback, 2026-07-11).
+- Only `Pending` rows count as unresolved.
 
 **1.7 — Keep overdue work visible**
 As a technician, I want an Overdue tab showing all overdue and MISSED refills across every month, so that slipped prescriptions stay visible without cluttering the day or month I'm working.
@@ -171,6 +171,15 @@ Acceptance criteria:
 
 **4.4 — Just open it**
 As a technician, I want the tool to be a single .exe I double-click, so that I don't need to install anything or run commands.
+
+**4.5 — Insurance master-brand logos** *(pending assets — needs logo images, brand mapping, and Medicare/Medicaid designations; see design doc §8.3)*
+As a technician, I want each insurance to show its master brand's official logo next to its name, so that plans group visually by insurer without memorizing colors.
+
+Acceptance criteria (to finalize once the inputs arrive):
+- Grid Insurance cells show the plan name with the master-brand logo to its right, replacing the color fill.
+- Settings organizes insurances under master-brand groups (all BC/BS variants under one BCBS group, etc.); adding a new insurance files it into a group.
+- Plans combined with Medicare or Medicaid show "(Medicare)" / "(Medicaid)" after the name, alongside the group logo.
+- Logo images are bundled/stored locally (offline, single-exe constraint).
 
 ---
 

@@ -74,4 +74,4 @@ INSERT INTO settings (key, value) VALUES
   ('alert_lookahead_days', '3'),
   ('alert_min_profit',     '50'),
   ('copay_tiers',          '[{"max":0,"color":"#d4e157"},{"max":29.99,"color":"#bbdefb"},{"max":99.99,"color":"#e1bee7"},{"max":300,"color":"#f8bbd0"},{"max":null,"color":"#e57373"}]'),
-  ('status_colors',        '{"Pending":"#eeeeee","Checked Out":"#fdd835","MISSED":"#1a237e","$ LOSS":"#c62828"}');
+  ('status_colors',        '{"Pending":"#eeeeee","Checked Out":"#fdd835","MISSED":"#1a237e"}');

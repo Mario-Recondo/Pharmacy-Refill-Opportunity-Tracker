@@ -17,6 +17,12 @@ importers:
       '@tauri-apps/plugin-sql':
         specifier: ^2.4.0
         version: 2.4.0
+      ag-grid-community:
+        specifier: ^36.0.0
+        version: 36.0.0
+      ag-grid-react:
+        specifier: ^36.0.0
+        version: 36.0.0(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
       react:
         specifier: ^19.1.0
         version: 19.2.7
@@ -537,6 +543,21 @@ packages:
     peerDependencies:
       vite: ^4.2.0 || ^5.0.0 || ^6.0.0 || ^7.0.0
 
+  ag-charts-types@14.0.0:
+    resolution: {integrity: sha512-89X4J/OeOTzTp505126JayGEn3k6QUKz3UHSR0/ggoVZYzVqtMN13k/B136S1+YBwgnzyJ/NARnnIRTPWsWG9g==}
+
+  ag-grid-community@36.0.0:
+    resolution: {integrity: sha512-73PeuoG1Pofi6o1o2dYd092m5AdCt0uq/iCaVTCxLw9eRJGLZu0I+HICReolUmUH7A5X+CnYDXiE+P9S8dUqCQ==}
+
+  ag-grid-react@36.0.0:
+    resolution: {integrity: sha512-ShmynyRQDoxuXBso+kPliZJnivQKwBG/EGclCBV3dg98ou2kq7yxdgf8DhrW4uM5SekNDaqor4Gn9OAGtH2o3g==}
+    peerDependencies:
+      react: ^16.8.0 || ^17.0.0 || ^18.0.0 || ^19.0.0
+      react-dom: ^16.8.0 || ^17.0.0 || ^18.0.0 || ^19.0.0
+
+  ag-stack@36.0.0:
+    resolution: {integrity: sha512-ciXqjZygVLk3tnZWOAQyOxP48Ju2ZmaSAtIebekXJwHqA7vB+NJ8ZME/O4XTRpInTSHn2KSu/KTxgWJO8dduiw==}
+
   baseline-browser-mapping@2.10.42:
     resolution: {integrity: sha512-c/jurFrDLyui7o1J86yLkRu4LMsTYcBohveus7/I2Hzdn9KIP2bdJPTue/lR1KH46enoPbD77GKeSYNdyPoD3Q==}
     engines: {node: '>=6.0.0'}
@@ -608,6 +629,10 @@ packages:
     engines: {node: '>=6'}
     hasBin: true
 
+  loose-envify@1.4.0:
+    resolution: {integrity: sha512-lyuxPGr/Wfhrlem2CL/UcnUc1zcqKAImBDzukY7Y5F/yQiNdko6+fRLevlw1HgMySw7f611UIY408EtxRSoK3Q==}
+    hasBin: true
+
   lru-cache@5.1.1:
     resolution: {integrity: sha512-KpNARQA3Iwv+jTA0utUVVbrh+Jlrr1Fv0e56GGzAFOXN7dk/FviaDW8LHmK52DlcH4WP2n6gI8vN1aesBFgo9w==}
 
@@ -623,6 +648,10 @@ packages:
     resolution: {integrity: sha512-wRNIrw4DmVLKQlbgOMdkMx27Wrpzes2hh5Jtbi2bjPd+4wJstWIqP5A+lscnqbm0xxmT5Bpg8Lec5ItEBwx6BQ==}
     engines: {node: '>=18'}
 
+  object-assign@4.1.1:
+    resolution: {integrity: sha512-rJgTQnkUnH1sFw8yT6VSU3zD3sWmu6sZhIseY8VX+GRu3P6F7Fu+JNDoXfklElbLJSnc3FUQHVe4cU5hj+BcUg==}
+    engines: {node: '>=0.10.0'}
+
   picocolors@1.1.1:
     resolution: {integrity: sha512-xceH2snhtb5M9liqDsmEw56le376mTZkEX/jEb/RxNFyegNul7eNslCXP9FDj/Lcu0X8KEyMceP2ntpaHrDEVA==}
 
@@ -634,10 +663,16 @@ packages:
     resolution: {integrity: sha512-vuwillviilfKZsg0VGj5R/YwwcHx4SLsIOI/7K6mQkWx+l5cUHTjj5g0AasTBcyXsbfTgrwsUNmVUb5xVwyPwg==}
     engines: {node: ^10 || ^12 || >=14}
 
+  prop-types@15.8.1:
+    resolution: {integrity: sha512-oj87CgZICdulUohogVAR7AjlC0327U4el4L6eAvOqCeudMDVU0NThNaV+b9Df4dXgSP1gXMTnPdhfe/2qDH5cg==}
+
   react-dom@19.2.7:
     resolution: {integrity: sha512-t0BRVXvbiE/o20Hfw669rLbMCDWtYZLvmJigy2f0MxsXF+71pxhR3xOkspmsO8h3ZlNzyibAmtCa3l4lYKk6gQ==}
     peerDependencies:
       react: ^19.2.7
+
+  react-is@16.13.1:
+    resolution: {integrity: sha512-24e6ynE2H+OKt4kqsOvNd8kBpV65zoxbA4BVsEOB3ARVWQki/DHzaUoC5KuON/BiccDaCCTZBuOcfZs70kR8bQ==}
 
   react-refresh@0.17.0:
     resolution: {integrity: sha512-z6F7K9bV85EfseRCp2bzrpyQ0Gkw1uLoCel9XBVWPg/TjRj94SkJzUTGfOa4bs7iJvBWtQG0Wq7wnI0syw3EBQ==}
@@ -1109,6 +1144,22 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
+  ag-charts-types@14.0.0: {}
+
+  ag-grid-community@36.0.0:
+    dependencies:
+      ag-charts-types: 14.0.0
+      ag-stack: 36.0.0
+
+  ag-grid-react@36.0.0(react-dom@19.2.7(react@19.2.7))(react@19.2.7):
+    dependencies:
+      ag-grid-community: 36.0.0
+      prop-types: 15.8.1
+      react: 19.2.7
+      react-dom: 19.2.7(react@19.2.7)
+
+  ag-stack@36.0.0: {}
+
   baseline-browser-mapping@2.10.42: {}
 
   browserslist@4.28.5:
@@ -1177,6 +1228,10 @@ snapshots:
 
   json5@2.2.3: {}
 
+  loose-envify@1.4.0:
+    dependencies:
+      js-tokens: 4.0.0
+
   lru-cache@5.1.1:
     dependencies:
       yallist: 3.1.1
@@ -1186,6 +1241,8 @@ snapshots:
   nanoid@3.3.15: {}
 
   node-releases@2.0.51: {}
+
+  object-assign@4.1.1: {}
 
   picocolors@1.1.1: {}
 
@@ -1197,10 +1254,18 @@ snapshots:
       picocolors: 1.1.1
       source-map-js: 1.2.1
 
+  prop-types@15.8.1:
+    dependencies:
+      loose-envify: 1.4.0
+      object-assign: 4.1.1
+      react-is: 16.13.1
+
   react-dom@19.2.7(react@19.2.7):
     dependencies:
       react: 19.2.7
       scheduler: 0.27.0
+
+  react-is@16.13.1: {}
 
   react-refresh@0.17.0: {}
 

@@ -1,50 +1,198 @@
-.page {
-  padding: 16px 24px;
-  font-family: "Segoe UI", system-ui, sans-serif;
-  color: #222;
-}
-
-h1 {
-  font-size: 20px;
-  margin: 0 0 4px;
-}
-
-h2 {
-  font-size: 14px;
-  margin: 18px 0 6px;
-  color: #444;
-}
-
-.status {
-  font-size: 13px;
-  color: #2e7d32;
+html,
+body,
+#root {
+  height: 100%;
   margin: 0;
 }
 
-.pills {
+body {
+  font-family: "Segoe UI", system-ui, sans-serif;
+  color: #222;
+  background: #fafafa;
+}
+
+.page {
+  padding: 16px 24px;
+}
+
+.app,
+.month-view {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+/* ---- toolbar ---- */
+
+.toolbar {
   display: flex;
   flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 20px;
+  padding: 8px 12px;
+  border-bottom: 1px solid #ddd;
+  background: #fff;
+}
+
+.toolbar-group {
+  display: flex;
+  align-items: center;
   gap: 6px;
 }
 
-.pill {
-  padding: 2px 10px;
-  border-radius: 999px;
-  font-size: 12px;
+.toolbar-group.filters {
+  flex: 1;
 }
 
-.settings {
-  border-collapse: collapse;
+.toolbar button,
+.toolbar select {
+  font: inherit;
   font-size: 13px;
-}
-
-.settings td {
-  border: 1px solid #ddd;
   padding: 4px 10px;
-  vertical-align: top;
+  border: 1px solid #c5c5c5;
+  border-radius: 6px;
+  background: #fff;
+  cursor: pointer;
 }
 
-.settings code {
-  font-size: 12px;
-  word-break: break-all;
+.toolbar button:hover,
+.toolbar select:hover {
+  background: #f0f0f0;
+}
+
+.toolbar .month-select {
+  font-weight: 600;
+  min-width: 170px;
+}
+
+.toolbar .check {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 13px;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.toolbar .lock.on {
+  background: #e8eaf6;
+  border-color: #3f51b5;
+}
+
+.toolbar .clear-filters {
+  border-color: #ef9a9a;
+  color: #c62828;
+}
+
+.row-count {
+  font-size: 13px;
+  color: #666;
+  white-space: nowrap;
+}
+
+/* ---- grid ---- */
+
+.grid-wrap {
+  flex: 1;
+  min-height: 0;
+  padding: 8px 12px 12px;
+}
+
+/* day separator between date groups — only rendered in due-date order */
+.ag-row.day-break {
+  border-top: 3px solid #3f51b5 !important;
+}
+
+.rx-copy {
+  cursor: pointer;
+  font-variant-numeric: tabular-nums;
+}
+
+.rx-copy:hover {
+  text-decoration: underline;
+}
+
+.rx-copy.copied {
+  color: #2e7d32;
+  font-weight: 600;
+}
+
+.note-cell {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  width: 100%;
+}
+
+.nimble-days {
+  font-size: 11px;
+  font-weight: 700;
+  padding: 0 6px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.75);
+  color: #1a1a1a;
+}
+
+.nimble-days.stale {
+  background: #c62828;
+  color: #fff;
+}
+
+.ag-cell.gated {
+  pointer-events: none;
+}
+
+/* ---- colored dropdown editor ---- */
+
+.pill-editor {
+  min-width: 190px;
+  max-height: 320px;
+  overflow-y: auto;
+  background: #fff;
+  border: 1px solid #bbb;
+  border-radius: 6px;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.18);
+  outline: none;
+}
+
+.pill-option {
+  padding: 5px 12px;
+  font-size: 13px;
+  cursor: pointer;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.06);
+}
+
+.pill-option.highlight {
+  filter: brightness(0.92);
+}
+
+.pill-option.current {
+  font-weight: 700;
+}
+
+/* ---- empty month state ---- */
+
+.empty-month {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  color: #555;
+  text-align: center;
+  padding: 24px;
+}
+
+.empty-month h2 {
+  margin: 0 0 8px;
+  font-size: 20px;
+  color: #333;
+}
+
+.empty-month p {
+  margin: 0;
+  max-width: 420px;
+  font-size: 14px;
+  line-height: 1.5;
 }

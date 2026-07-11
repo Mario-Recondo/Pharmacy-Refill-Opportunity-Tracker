@@ -48,7 +48,7 @@ CREATE TABLE refills (
   refill_note_id INTEGER REFERENCES refill_notes (id),
   call_note_id   INTEGER REFERENCES call_notes (id), -- only meaningful when refill note is Nimble Link / Call Pt
   status         TEXT NOT NULL DEFAULT 'Pending'
-                 CHECK (status IN ('Pending', 'Checked Out', 'MISSED', '$ LOSS')),
+                 CHECK (status IN ('Pending', 'Checked Out', 'MISSED')),
   notes          TEXT,
   source         TEXT NOT NULL DEFAULT 'manual' CHECK (source IN ('manual', 'import')),
   created_at     TEXT NOT NULL DEFAULT (datetime('now')),

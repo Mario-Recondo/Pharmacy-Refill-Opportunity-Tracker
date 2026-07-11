@@ -48,9 +48,9 @@ This is the flow the technician repeats dozens of times a day. Entry points: a c
 
    **Branch F: Patient declines / defers.** Refill Note = `NO Per Pt` (wants verbal authorization; check patient notes) — or the deferral surfaces during contact, handled in Flow 2.1. If therapy is ended outright (patient or prescriber discontinued it) → Refill Note = `Discontinued`; the row resolves — no further fills expected.
 
-   **Branch G: Negative or unacceptable profit.** Technician may still fill (business decision made outside the tool). If filled at a loss: enter the negative New Profit → tool prompts "Mark as $ LOSS?" → confirm or decline.
+   **Branch G: Negative or unacceptable profit.** Technician may still fill (business decision made outside the tool). If filled at a loss: enter the negative New Profit (the profit cell turns red) and check the row out as usual — a loss lives in the money columns, not in status ($ LOSS removed per technician feedback, 2026-07-11).
 
-4. End states for any pass through this flow: the row is either **resolved** (`Checked Out`, `$ LOSS`) or **parked with a reason** (still `Pending`, with a Refill Note explaining why). A row should never be left `Pending` with no note — the grid's "unresolved" filter is the safety net that surfaces these.
+4. End states for any pass through this flow: the row is either **resolved** (`Checked Out`) or **parked with a reason** (still `Pending`, with a Refill Note explaining why). A row should never be left `Pending` with no note — the grid's "unresolved" filter is the safety net that surfaces these.
 5. If the due date passes without resolution → technician sets **Status = MISSED** (v1: manual; a future enhancement may flag overdue `Pending` rows automatically). Overdue `Pending` rows and `MISSED` rows surface automatically in the **Overdue tab** (Flow 8), so slipped work stays visible without hunting through past months.
 
 ### Flow 2.1: Contact Outcome (Call Note)
@@ -83,9 +83,7 @@ flowchart TD
     ADJ -->|No refills left| FAXQ{Fax sent recently?}
     FAXQ -->|No| FAX[Fax MD → Note: Faxed for Script → park]
     FAXQ -->|Yes| NOFAX[Note: Fax not sent → park]
-    ENTER --> NEG{Profit negative?}
-    NEG -->|Yes, filled anyway| LOSS[Prompt: mark $ LOSS?]
-    NEG -->|No| CONTACT{Contact method?}
+    ENTER --> CONTACT{Contact method?}
     CONTACT -->|Link| NIMBLE[Note: Nimble Link]
     CONTACT -->|Phone| CALLPT[Note: Call Pt]
     NIMBLE --> OUTCOME[Call Note: outcome per Flow 2.1]
@@ -174,7 +172,7 @@ The month-rollover ritual, replacing "clone the tab."
 3. Per row, decision — still worth pursuing?
    - Yes → work it via Flow 2 (Rx # copy works here like everywhere else). In v3, an **"add to today's call list"** action pulls the row into the current daily queue instead of working it immediately.
    - No → set **Status = MISSED** (or leave as MISSED). The row remains listed in the tab indefinitely as the permanent record of slipped refills (reopening it returns it to `Pending`).
-4. Resolving a row (`Checked Out`, `$ LOSS`) removes it from the tab.
+4. Resolving a row (`Checked Out`) removes it from the tab.
 
 ---
 
@@ -186,20 +184,17 @@ The status field is the coarse lifecycle; notes carry the detail. Legal movement
 stateDiagram-v2
     [*] --> Pending : created (import or manual)
     Pending --> Pending : refill/call notes updated (worked, parked, retried)
-    Pending --> CheckedOut : paid & picked up / delivered
-    Pending --> DollarLoss : filled at negative profit (prompted)
+    Pending --> CheckedOut : paid & picked up / delivered (incl. filled at a loss)
     Pending --> Missed : due date passed unresolved (manual, v1)
     CheckedOut --> Pending : reopened (correction)
-    DollarLoss --> Pending : reopened (correction)
     Missed --> Pending : reopened (correction)
     CheckedOut : Checked Out
-    DollarLoss : $ LOSS
     Missed : MISSED
 ```
 
 Rules of thumb encoded above:
 - Terminal states are reachable **only from** `Pending`, and any terminal state can be reopened to `Pending` to correct mistakes (edits are never locked).
-- All the workflow nuance (PA pending, too soon, voicemail full, link re-sent…) lives in the **notes**, not in status — status stays a four-value field so "unresolved" filtering stays trivial.
+- All the workflow nuance (PA pending, too soon, voicemail full, link re-sent…) lives in the **notes**, not in status — status stays a three-value field so "unresolved" filtering stays trivial.
 
 ---
 

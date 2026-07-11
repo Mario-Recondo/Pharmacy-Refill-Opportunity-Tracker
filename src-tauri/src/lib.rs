@@ -15,6 +15,12 @@ pub fn run() {
             sql: include_str!("../migrations/002_seed_lookups.sql"),
             kind: MigrationKind::Up,
         },
+        Migration {
+            version: 3,
+            description: "sketch_feedback",
+            sql: include_str!("../migrations/003_sketch_feedback.sql"),
+            kind: MigrationKind::Up,
+        },
     ];
 
     tauri::Builder::default()
