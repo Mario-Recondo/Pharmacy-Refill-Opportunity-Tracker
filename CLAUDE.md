@@ -20,6 +20,7 @@ Desktop tool (single-user, offline) for a pharmacy technician at an independent 
 ## Commands
 
 - `pnpm tauri dev` — run the app (compiles Rust on first run; needs `~/.cargo/bin` on PATH)
+- `powershell -File scripts/dev-mcp.ps1` — run the app with the WebView2 CDP port (9223) open; the `app-webview` MCP in `.mcp.json` attaches to it so the agent can inspect/click/screenshot the live app. GUI launches die silently in sandboxed shells — launch unsandboxed
 - `pnpm tauri build` — release build; standalone exe at `src-tauri/target/release/`, installers under `bundle/`
 - `npx tsc --noEmit` — frontend typecheck
 
@@ -30,4 +31,4 @@ Desktop tool (single-user, offline) for a pharmacy technician at an independent 
 - Profit is verified, never predicted: `old_profit` = last verified profit (what Opportunities shows); `new_profit` is manual-only
 - Lookup vocabularies (insurances, refill/call notes) are data, editable in Settings — never hardcode them in components
 - All edits persist immediately; no Save buttons. Confirmations only for destructive actions
-- Commit style: user asks for commits/pushes to `main` explicitly; docs and decisions are folded into Design_docs as they're made
+- Git workflow (since M1): new work goes on a feature branch → push the branch → open a PR; never commit directly to `main`. Commit messages and PR text carry no AI-attribution lines (no "Co-Authored-By: Claude" or similar). Docs and decisions are folded into Design_docs as they're made
