@@ -12,7 +12,7 @@ As a technician, I want to open the app and see the current month's refill queue
 Acceptance criteria:
 - On launch, the grid shows refills whose due date falls in the current calendar month, sorted by due date ascending.
 - A month picker lets me switch to any past or future month; months containing rows are visually distinguished (with a row count) from empty months.
-- Day boundaries within the month are visually separated (matching the divider lines the current sheet uses between dates).
+- Day boundaries within the month are visually separated (matching the divider lines the current sheet uses between dates); the separators appear only while the grid is sorted by due date, and hide under any other sort.
 - Navigating to an empty month shows an empty state with "Add refill" (and, in v2, "Import CSV") — never a bare blank grid.
 - Columns sort on header click; a one-click "Reset sort" control restores the default due-date order.
 
@@ -63,6 +63,7 @@ As a technician, I want an Overdue tab showing all overdue and MISSED refills ac
 Acceptance criteria:
 - The tab lists every row whose due date has passed while status is `Pending`, plus all `MISSED` rows, regardless of which month they belong to.
 - Rows open, edit, and resolve exactly like grid rows; resolving a row removes it from the tab.
+- `MISSED` rows stay listed indefinitely (no auto-hide) — the tab is also the permanent record of slipped refills.
 - The month/day grid views are unaffected — overdue rows from other months never bleed into them.
 - (v3, with the Call List) Each row offers an "add to today's call list" action to pull it into the current queue.
 
@@ -117,6 +118,7 @@ Acceptance criteria:
 As a technician, I want a panel listing refills due soon whose last verified profit was high, so that I work the most valuable prescriptions first and never let one slip to MISSED.
 
 Acceptance criteria:
+- The panel is a collapsible right-hand sidebar next to the grid (collapses to a thin rail).
 - The panel lists rows where due date is within X days, last verified profit ≥ $Y, status is `Pending`, and New Profit is still empty, sorted by last profit descending. X and Y are editable in Settings.
 - "Last verified profit" is the row's `old_profit` — what the pharmacy earned the last time this prescription was sold.
 - Each card shows drug, Rx # (copyable), due date, last profit clearly labeled as "last fill / unverified," and the current refill note.

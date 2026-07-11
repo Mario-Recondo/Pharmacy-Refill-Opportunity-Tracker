@@ -173,7 +173,7 @@ The month-rollover ritual, replacing "clone the tab."
 2. The list shows, across **all** months: `Pending` rows whose due date has passed, plus `MISSED` rows — oldest first. The current day/month grid is never polluted by these; this tab is their home.
 3. Per row, decision — still worth pursuing?
    - Yes → work it via Flow 2 (Rx # copy works here like everywhere else). In v3, an **"add to today's call list"** action pulls the row into the current daily queue instead of working it immediately.
-   - No → set **Status = MISSED** (or leave as MISSED). The row remains in the tab as a MISSED record until reopened or the technician filters it out.
+   - No → set **Status = MISSED** (or leave as MISSED). The row remains listed in the tab indefinitely as the permanent record of slipped refills (reopening it returns it to `Pending`).
 4. Resolving a row (`Checked Out`, `$ LOSS`) removes it from the tab.
 
 ---
