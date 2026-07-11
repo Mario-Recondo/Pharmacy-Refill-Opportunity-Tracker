@@ -1,0 +1,33 @@
+# Refill Tracker
+
+Desktop tool (single-user, offline) for a pharmacy technician at an independent pharmacy: tracks prescription refills, contact attempts, copays/net profits, and surfaces high-value refills coming due. Replaces a Google Sheets month-tab workflow. Ships as a single Windows .exe.
+
+## Read first
+
+- `Design_docs/refill-tracker-design.md` — the authoritative spec: data model, business rules, features by version (v1 grid, v2 CSV import, v3 call list/analytics)
+- `Design_docs/user_stories.md` — acceptance criteria per story
+- `Design_docs/user_flows.md` — how the technician actually moves through the tool; Flow 2 is the core loop
+- Screenshots in `Design_docs/` are ground truth for vocabularies and colors (taken from the real sheet and real PioneerRX exports)
+- `QUESTIONS.md` (gitignored, repo root) — open questions for the technician; when answered, fold the decision into Design_docs
+
+## Stack
+
+- Tauri 2 + React + TypeScript + Vite
+- SQLite via `tauri-plugin-sql` — migrations live in `src-tauri/migrations/*.sql`, registered in `src-tauri/src/lib.rs`, applied automatically on first `Database.load`
+- Database file: `%APPDATA%/com.pharmacy.refill-tracker/refills.db`
+- Grid: **AG Grid Community** (decided after spike; free MIT tier covers all v1 needs). Gotchas: call `redrawRows()` on sort change (row classes don't auto-refresh); drag-fill/range-paste are Enterprise-only — use checkbox selection + apply-to-selected for bulk edits
+
+## Commands
+
+- `pnpm tauri dev` — run the app (compiles Rust on first run; needs `~/.cargo/bin` on PATH)
+- `pnpm tauri build` — release build; standalone exe at `src-tauri/target/release/`, installers under `bundle/`
+- `npx tsc --noEmit` — frontend typecheck
+
+## Rules that shape everything
+
+- Months are data, not structure: one `refills` table, views filter by `due_date`
+- `(rx_number, due_date)` is the natural key; import upserts fill NULL fields only and never overwrite technician-entered values
+- Profit is verified, never predicted: `old_profit` = last verified profit (what Opportunities shows); `new_profit` is manual-only
+- Lookup vocabularies (insurances, refill/call notes) are data, editable in Settings — never hardcode them in components
+- All edits persist immediately; no Save buttons. Confirmations only for destructive actions
+- Commit style: user asks for commits/pushes to `main` explicitly; docs and decisions are folded into Design_docs as they're made

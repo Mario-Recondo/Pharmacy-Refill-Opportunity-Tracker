@@ -1,7 +1,19 @@
 # Local working notes
 QUESTIONS.md
 
-# Dependencies / build output (for when the app scaffold lands)
+# Dependencies / build output
 node_modules/
 dist/
+dist-ssr/
 src-tauri/target/
+*.local
+
+# Logs
+logs/
+*.log
+
+# Editor directories and files
+.vscode/*
+!.vscode/extensions.json
+.idea/
+.DS_Store
