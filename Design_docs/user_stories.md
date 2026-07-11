@@ -15,6 +15,7 @@ Acceptance criteria:
 - Day boundaries within the month are visually separated (matching the divider lines the current sheet uses between dates); the separators appear only while the grid is sorted by due date, and hide under any other sort.
 - Navigating to an empty month shows an empty state with "Add refill" (and, in v2, "Import CSV") — never a bare blank grid.
 - Columns sort on header click; a one-click "Reset sort" control restores the default due-date order.
+- A Secondary (coverage) column exists but is hidden by default; a show/hide toggle displays it when I want to see secondary coverage.
 
 **1.2 — Filter to what needs attention**
 As a technician, I want quick filters for day, status, insurance, and "unresolved only," so that I can focus on today's work or find what's slipping.
@@ -67,6 +68,23 @@ Acceptance criteria:
 - The month/day grid views are unaffected — overdue rows from other months never bleed into them.
 - (v3, with the Call List) Each row offers an "add to today's call list" action to pull it into the current queue.
 
+**1.8 — Keep day sections while sorting other columns**
+As a technician, I want to lock the due-date order and then sort by another column, so that rows re-rank within each day without the day sections falling apart.
+
+Acceptance criteria:
+- A due-date lock toggle sits with the sort controls; engaging it fixes due date (ascending or descending, whichever is active) as the primary sort key.
+- While locked, clicking any other column header sorts rows within each day by that column (with the usual ascending/descending toggle); the day separator lines remain visible throughout.
+- Unlocking restores normal single-column sorting; "Reset sort" clears the lock and returns to the default due-date ascending order.
+
+**1.9 — See how long a Nimble link has been waiting**
+As a technician, I want a day counter next to "Nimble Link" refill notes that turns red after 5 days, so that unpaid links never sit forgotten.
+
+Acceptance criteria:
+- When a row's Refill Note is `Nimble Link`, the cell shows — to the right of the label, within the cell — the number of days since the note was set to Nimble Link.
+- Once the counter reaches 5 days (threshold editable in Settings), it highlights red.
+- The counter appears only in the month grid — not in the drawer, Opportunities cards, or the Overdue tab.
+- Setting the refill note away from and later back to Nimble Link restarts the count (the count reflects the most recent link sent).
+
 ---
 
 ## Epic 2: Adding & Inspecting Refills (v1)
@@ -84,6 +102,7 @@ As a technician, I want to click a row and see all its details in a side drawer,
 
 Acceptance criteria:
 - The drawer shows every field in an editable form layout.
+- If the free-text note is longer than the Notes field shows, hovering over the Notes section pops up a bubble with the full note text; the bubble disappears when the cursor moves away.
 - Closing the drawer returns me to the grid with scroll position and filters intact.
 
 **2.3 — See a prescription's history**
@@ -131,11 +150,12 @@ Acceptance criteria:
 ## Epic 4: Configuration & Data Safety (v1)
 
 **4.1 — Manage dropdown vocabularies**
-As a technician, I want to add/edit/retire insurances, refill notes, and call notes (with their colors) in Settings, so that a new payer or workflow term never requires a code change.
+As a technician, I want to add/edit/retire insurances, secondary coverages, refill notes, and call notes (with their colors) in Settings, so that a new payer or workflow term never requires a code change.
 
 Acceptance criteria:
 - Each lookup list supports add, rename, recolor, reorder, and deactivate (deactivated options stay on historical rows but leave the dropdowns).
 - Insurances have a Medicare/Medicaid flag that applies the uniform group color automatically.
+- Secondary coverages are managed exactly like insurances; the list ships with a single seeded option, `Coupon`.
 
 **4.2 — Tune thresholds**
 As a technician, I want to edit copay tier boundaries and alert thresholds (X days, $Y), so that the tool matches how our pharmacy actually prioritizes.
@@ -163,6 +183,7 @@ Acceptance criteria:
 - I choose a file and see a column-mapping step; known Pioneer headers (Rx Number, Dispensed Item Name, Dispensed Item NDC, Days Supply Ends On, Patient Paid Amount, Net Profit, Number Of Refills Filled, Primary, Secondary) are pre-mapped, and the mapping is remembered for next time.
 - Exports contain whichever columns I selected in Pioneer; the import works with any subset (only Rx Number is required). A file with no due-date column sends all its rows through the blank-due-date bulk-assignment step instead of failing.
 - When a Primary column is present, it fills the Insurance field on rows where it's blank, matched case-insensitively against my insurances list; unmatched names are surfaced for me to map to an existing insurance, create as new, or leave blank — never guessed.
+- When a Secondary column is present, it fills the Secondary coverage field the same way (case-insensitive match against my secondary coverages list; unmatched values surfaced to map, create, or leave blank).
 - A preview shows each row's disposition — new, update, or skip — before anything is written.
 - Rows with a missing Rx # or unparseable date land in a reviewable error list; nothing is silently dropped.
 - In the error list, I can multi-select rows with a blank due date and apply one due date to all of them at once, or skip them individually or in bulk.
@@ -184,6 +205,16 @@ Acceptance criteria:
 As a technician, I want a focused view of just today's due refills where I set outcomes, so that daily calling is a checklist rather than a spreadsheet hunt.
 
 Note: pending technician preference, this ships either as a dedicated page or as a saved "Today" filter on the month grid. Both are views over the same refills table; no schema impact either way.
+
+**6.2 — Quick-add an associated Rx from a row**
+As a technician, I want to right-click a row and add an associated refillable Rx through a short form, so that a sibling prescription discovered mid-call gets tracked without filling out the whole drawer.
+
+Acceptance criteria:
+- Right-clicking an existing row offers "Add associated Rx," which opens a simplified create form.
+- Required fields: Rx #, medication name (autocomplete as in story 2.1), insurance, refill note.
+- The due date is pre-set to the selected row's due date (not entered manually).
+- Optional fields: old/new copay, old/new profit, refills filled, status, and the remaining drawer fields.
+- Saving applies the same duplicate protection (Rx # + due date) as manual add.
 
 ---
 

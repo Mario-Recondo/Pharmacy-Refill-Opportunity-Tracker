@@ -30,7 +30,7 @@ This is the flow the technician repeats dozens of times a day. Entry points: a c
    **Branch A: Approved.** Pioneer's window shows copay, drug cost, and net profit.
    - A1. Back in the tool: enter **New Copay** and **New Profit** (cells auto-color; row leaves the Opportunities panel because profit is now verified).
    - A2. **Decision — how to reach the patient?**
-     - A2a. **Nimble Link** → set Refill Note = `Nimble Link` → Call Note field unlocks → proceed to Flow 2.1 (contact outcome).
+     - A2a. **Nimble Link** → set Refill Note = `Nimble Link` → Call Note field unlocks → proceed to Flow 2.1 (contact outcome). From this moment the month grid shows a days-since-sent counter inside the cell; at 5 days it turns red — the cue to re-send the link or switch to a call (design doc §5).
      - A2b. **Phone call** (typically 65+ / not tech-savvy) → set Refill Note = `Call Pt` → Call Note unlocks → Flow 2.1.
    - A3. Once payment/logistics resolve → set **Status = Checked Out**. Row is done.
 
@@ -157,7 +157,7 @@ The month-rollover ritual, replacing "clone the tab."
 
 ## Flow 7: Settings & Data Safety
 
-**7a. Vocabulary change** (new insurance, new note type): Settings → relevant list → add/rename/recolor/reorder/deactivate → change reflects immediately in dropdowns; deactivated options persist on historical rows but leave the menus.
+**7a. Vocabulary change** (new insurance, new secondary coverage, new note type): Settings → relevant list → add/rename/recolor/reorder/deactivate → change reflects immediately in dropdowns; deactivated options persist on historical rows but leave the menus.
 
 **7b. Threshold tuning:** Settings → edit copay tier boundaries or alert X/Y → grid recolors and Opportunities panel recomputes immediately.
 
