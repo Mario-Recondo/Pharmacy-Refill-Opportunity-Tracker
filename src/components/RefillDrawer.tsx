@@ -4,9 +4,11 @@ import {
   findOrCreateDrug,
   findRefillByRxDue,
   loadDrugs,
+  loadRxDrug,
   loadRxHistory,
   updateRefillCore,
   updateRefillField,
+  updateRxDrug,
 } from "../data/refills";
 import { STATUSES, type Drug, type EditableField, type Lookup, type Lookups, type RefillRow, type RefillStatus } from "../data/types";
 import { copayColor, formatMoney, profitStyle, textColorFor } from "../lib/colors";
@@ -20,8 +22,8 @@ interface DrawerProps {
   /** max visible profit from the grid, so drawer profit tints match the grid's relative shading */
   profitMax: number;
   onClose: () => void;
-  /** a field on the open row was persisted; dateChanged = due date moved, row may have left the month */
-  onRowEdited: (row: RefillRow, dateChanged: boolean) => void;
+  /** a field on the open row was persisted; reloadMonth = other rows were affected too (due-date move, Rx-wide drug correction) */
+  onRowEdited: (row: RefillRow, reloadMonth: boolean) => void;
   onCreated: (id: number, dueDate: string) => void;
   /** jump to another refill row (history click, duplicate-open) */
   onOpenRefill: (id: number, dueDate: string) => void;
@@ -142,6 +144,12 @@ function DrugField({
   const [open, setOpen] = useState(false);
   const [creating, setCreating] = useState(false);
   const [ndc, setNdc] = useState("");
+
+  // follow external changes (e.g. create-mode "Use <existing drug>" from the Rx-conflict warning)
+  useEffect(() => {
+    if (!open) setText(current?.name ?? "");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [current?.name]);
 
   const matches = useMemo(() => {
     const q = text.trim().toLowerCase();
@@ -272,8 +280,11 @@ export default function RefillDrawer({ mode, lookups, profitMax, onClose, onRowE
     notes: "",
   }));
   const [dup, setDup] = useState<{ id: number; dueDate: string } | null>(null);
+  // create-mode conflict: the entered Rx # already exists under a different medication
+  const [drugConflict, setDrugConflict] = useState<{ drug_id: number; drug_name: string; ndc: string | null } | null>(null);
   const [saving, setSaving] = useState(false);
   const dueInputRef = useRef<HTMLInputElement>(null);
+  const rxInputRef = useRef<HTMLInputElement>(null);
 
   // ----- edit-mode persistence (immediate, like the grid) --------------------
 
@@ -313,6 +324,12 @@ export default function RefillDrawer({ mode, lookups, profitMax, onClose, onRowE
         alert(`Rx # ${rx} already has a row due ${longDate(row.due_date)} — not saved.`);
         return false;
       }
+      // one Rx # = one medication: refuse to file this row under an Rx that is a different drug
+      const rxDrug = await loadRxDrug(rx);
+      if (rxDrug && rxDrug.drug_id !== row.drug_id) {
+        alert(`Rx # ${rx} is ${rxDrug.drug_name} — an Rx number always refers to one medication. Not saved; check the number.`);
+        return false;
+      }
       await updateRefillCore(row.id, { rx_number: rx });
       row.rx_number = rx;
       onRowEdited(row, false);
@@ -346,13 +363,25 @@ export default function RefillDrawer({ mode, lookups, profitMax, onClose, onRowE
   const saveDrug = async (sel: DrugPick): Promise<boolean> => {
     const row = editRow!;
     try {
+      const targetName = sel.kind === "existing" ? sel.drug.name : sel.name;
+      const otherRows = (await loadRxHistory(row.rx_number)).filter((r) => r.id !== row.id);
+      // one Rx # = one medication: a drug correction applies to every row of the Rx
+      if (otherRows.length > 0) {
+        const ok = window.confirm(
+          `Rx # ${row.rx_number} has ${otherRows.length} other row(s) as ${row.drug_name}. ` +
+            `An Rx number always refers to one medication — change every row of this Rx to ${targetName}?`,
+        );
+        if (!ok) return false;
+      }
       const drugId = sel.kind === "existing" ? sel.drug.id : await findOrCreateDrug(sel.name, sel.ndc);
       if (drugId === row.drug_id) return true;
-      await updateRefillCore(row.id, { drug_id: drugId });
+      if (otherRows.length > 0) await updateRxDrug(row.rx_number, drugId);
+      else await updateRefillCore(row.id, { drug_id: drugId });
       row.drug_id = drugId;
-      row.drug_name = sel.kind === "existing" ? sel.drug.name : sel.name;
+      row.drug_name = targetName;
       row.ndc = sel.kind === "existing" ? sel.drug.ndc : sel.ndc;
-      onRowEdited(row, false);
+      // sibling rows changed too — reload the month so any of them visible in the grid update
+      onRowEdited(row, otherRows.length > 0);
       return true;
     } catch (err) {
       alert(`Save failed — the change was undone.\n${err}`);
@@ -368,12 +397,21 @@ export default function RefillDrawer({ mode, lookups, profitMax, onClose, onRowE
     if (!draftValid || saving) return;
     setSaving(true);
     try {
-      const existing = await findRefillByRxDue(draft.rx_number.trim(), draft.due_date);
+      const rx = draft.rx_number.trim();
+      const existing = await findRefillByRxDue(rx, draft.due_date);
       if (existing) {
         setDup({ id: existing.id, dueDate: draft.due_date });
         return;
       }
       setDup(null);
+      // one Rx # = one medication: an existing Rx must keep its drug (a new drug name never matches it)
+      const rxDrug = await loadRxDrug(rx);
+      const draftDrugId = draft.drug!.kind === "existing" ? draft.drug!.drug.id : null;
+      if (rxDrug && rxDrug.drug_id !== draftDrugId) {
+        setDrugConflict(rxDrug);
+        return;
+      }
+      setDrugConflict(null);
       const drugId = draft.drug!.kind === "existing" ? draft.drug!.drug.id : await findOrCreateDrug(draft.drug!.name, draft.drug!.ndc);
       const id = await createRefill({
         rx_number: draft.rx_number.trim(),
@@ -491,6 +529,35 @@ export default function RefillDrawer({ mode, lookups, profitMax, onClose, onRowE
           </div>
         )}
 
+        {drugConflict && (
+          <div className="dup-warning">
+            <p>
+              Rx # {draft.rx_number.trim()} is {drugConflict.drug_name} — an Rx number always refers to one medication.
+            </p>
+            <div className="dup-actions">
+              <button
+                onClick={() => {
+                  setDraft((d) => ({
+                    ...d,
+                    drug: { kind: "existing", drug: { id: drugConflict.drug_id, name: drugConflict.drug_name, ndc: drugConflict.ndc } },
+                  }));
+                  setDrugConflict(null);
+                }}
+              >
+                Use {drugConflict.drug_name}
+              </button>
+              <button
+                onClick={() => {
+                  setDrugConflict(null);
+                  rxInputRef.current?.focus();
+                }}
+              >
+                Fix Rx #
+              </button>
+            </div>
+          </div>
+        )}
+
         <div className="drawer-fields">
           <label>
             Rx #
@@ -504,7 +571,12 @@ export default function RefillDrawer({ mode, lookups, profitMax, onClose, onRowE
                 onKeyDown={(e) => e.key === "Enter" && (e.target as HTMLInputElement).blur()}
               />
             ) : (
-              <input value={draft.rx_number} onChange={(e) => setDraft((d) => ({ ...d, rx_number: e.target.value }))} placeholder="Required" />
+              <input
+                ref={rxInputRef}
+                value={draft.rx_number}
+                onChange={(e) => setDraft((d) => ({ ...d, rx_number: e.target.value }))}
+                placeholder="Required"
+              />
             )}
           </label>
 

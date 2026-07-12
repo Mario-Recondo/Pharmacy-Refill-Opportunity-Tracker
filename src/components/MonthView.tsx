@@ -156,10 +156,10 @@ export default function MonthView({ lookups }: { lookups: Lookups }) {
     [ym],
   );
 
-  /** drawer persisted a field on `row`; if the due date moved, the row may belong to another month now */
+  /** drawer persisted a field on `row`; reloadMonth = other rows affected too (due-date move, Rx-wide drug fix) */
   const onRowEdited = useCallback(
-    (row: RefillRow, dateChanged: boolean) => {
-      if (dateChanged) reloadAfterMove(row.id, row.due_date, true);
+    (row: RefillRow, reloadMonth: boolean) => {
+      if (reloadMonth) reloadAfterMove(row.id, row.due_date, true);
       else setRows((prev) => [...prev]); // re-derive filters/shading from the mutated row
     },
     [reloadAfterMove],

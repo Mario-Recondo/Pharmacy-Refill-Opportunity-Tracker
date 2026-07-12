@@ -82,6 +82,26 @@ export async function updateRefillCore(
   );
 }
 
+/** The medication an Rx number already refers to, if any rows exist (one Rx # = one medication, design doc §5). */
+export async function loadRxDrug(rxNumber: string): Promise<{ drug_id: number; drug_name: string; ndc: string | null } | null> {
+  const db = await getDb();
+  const rows = await db.select<{ drug_id: number; drug_name: string; ndc: string | null }[]>(
+    `SELECT r.drug_id, d.name AS drug_name, d.ndc FROM refills r JOIN drugs d ON d.id = r.drug_id
+     WHERE r.rx_number = $1 ORDER BY r.due_date DESC LIMIT 1`,
+    [rxNumber],
+  );
+  return rows[0] ?? null;
+}
+
+/** Correct the medication on every row of an Rx number, keeping the one-Rx-one-drug invariant. */
+export async function updateRxDrug(rxNumber: string, drugId: number): Promise<void> {
+  const db = await getDb();
+  await db.execute("UPDATE refills SET drug_id = $1, updated_at = datetime('now') WHERE rx_number = $2", [
+    drugId,
+    rxNumber,
+  ]);
+}
+
 /** The existing row occupying an (rx_number, due_date) slot, if any — duplicate protection (story 2.1). */
 export async function findRefillByRxDue(rxNumber: string, dueDate: string): Promise<{ id: number } | null> {
   const db = await getDb();
