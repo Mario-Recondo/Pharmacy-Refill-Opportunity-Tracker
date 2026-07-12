@@ -96,6 +96,8 @@ Acceptance criteria:
 - "Add refill" opens a form (the detail drawer in create mode) with due date defaulting to the viewed day/month.
 - The drug field autocompletes against existing drugs; entering an unknown name creates a new drug (NDC optional, since compounds have none).
 - Duplicate protection: entering an Rx # + due date pair that already exists warns me and offers to open the existing row instead.
+- Rx-drug consistency (one Rx # = one medication, design doc §5): entering an Rx # that already exists under a different medication warns me and offers to use the existing medication or fix the Rx # — never saves the mismatch.
+- Probable-duplicate guard (design doc §6.1): if the Rx already has a row due within 21 days of the new one, saving warns me (same refill cycle, drifted date) and offers to open the existing row or explicitly create anyway.
 
 **2.2 — See everything about one refill**
 As a technician, I want to click a row and see all its details in a side drawer, so that I can work one prescription without losing my place in the grid.
@@ -113,6 +115,14 @@ Acceptance criteria:
 - History is strictly per Rx number. It must NOT group by drug name or NDC — the data contains no patient identity, so drug-level grouping would mix different patients' prescriptions together and present it as one prescription's history. (Drug-level aggregation is reserved for v3 analytics, where cross-patient averages are the intent.)
 - Known limitation, accepted: when a prescription is renewed under a new Rx number, its history starts fresh. This is correct behavior given the data available.
 - History is read-only from the drawer; clicking an entry navigates to that row.
+
+**2.4 — Delete a refill**
+As a technician, I want to delete a row that shouldn't exist (wrong entry, test data), but not so easily that a stray click can destroy real work.
+
+Acceptance criteria:
+- No one-click delete anywhere. The delete action lives behind a right-click on the row (context menu) and at the bottom of the detail drawer.
+- Either path asks for confirmation naming the exact row (Rx #, drug, due date) before anything is removed.
+- Deletion is permanent (no undo in v1); the row disappears from the grid, month counts, history, and — once built — Opportunities/Overdue immediately.
 
 ---
 

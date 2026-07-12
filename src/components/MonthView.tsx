@@ -6,6 +6,7 @@ import {
   themeQuartz,
   type CellClassParams,
   type CellClickedEvent,
+  type CellContextMenuEvent,
   type CellValueChangedEvent,
   type ColDef,
   type GridApi,
@@ -15,10 +16,12 @@ import {
   type ValueFormatterParams,
   type ValueParserParams,
 } from "ag-grid-community";
-import { loadMonth, loadMonthCounts, updateRefillField } from "../data/refills";
+import { deleteRefill, loadMonth, loadMonthCounts, updateRefillField } from "../data/refills";
 import { STATUSES, type EditableField, type Lookup, type Lookups, type RefillRow, type RefillStatus } from "../data/types";
 import { copayColor, formatMoney, profitStyle, textColorFor } from "../lib/colors";
+import { noteQualifiesForCallNote } from "../lib/rules";
 import { PillSelectEditor, RefillNoteRenderer, RxCopyRenderer, type GridCtx, type PillItem } from "./gridParts";
+import RefillDrawer from "./RefillDrawer";
 
 ModuleRegistry.registerModules([AllCommunityModule]);
 
@@ -44,13 +47,6 @@ function shiftYm(ym: string, delta: number): string {
 function dueLabel(iso: string): string {
   const [y, m, d] = iso.split("-").map(Number);
   return `${WEEKDAYS[new Date(y, m - 1, d).getDay()]} ${m}/${d}`;
-}
-
-/** Call notes only apply when the refill note is Nimble Link / Call Pt (design doc §5). */
-function noteQualifiesForCallNote(refillNoteId: number | null | undefined, lookups: Lookups): boolean {
-  if (refillNoteId == null) return false;
-  const name = lookups.refillNotes.find((n) => n.id === refillNoteId)?.name;
-  return name === "Nimble Link" || name === "Call Pt";
 }
 
 function toItems(rows: Lookup[], currentId?: number | null): PillItem[] {
@@ -80,6 +76,11 @@ export default function MonthView({ lookups }: { lookups: Lookups }) {
   const [filters, setFilters] = useState<Filters>(NO_FILTERS);
   const [showSecondary, setShowSecondary] = useState(false);
   const [locked, setLocked] = useState(false);
+  const [drawer, setDrawer] = useState<{ kind: "edit"; id: number } | { kind: "create"; dueDate: string } | null>(null);
+  // right-click row menu (delete lives here — deliberately not a one-click affordance)
+  const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number; row: RefillRow } | null>(null);
+  // row to focus (and maybe open) once its month's rows are loaded — history jumps, due-date moves, fresh creates
+  const pendingFocusRef = useRef<{ id: number; open: boolean } | null>(null);
 
   const apiRef = useRef<GridApi<RefillRow> | null>(null);
   const lockedRef = useRef(false);
@@ -129,6 +130,115 @@ export default function MonthView({ lookups }: { lookups: Lookups }) {
     apiRef.current?.refreshCells({ force: true });
     apiRef.current?.redrawRows();
   }, [filteredRows, profitMax]);
+
+  // ----- detail drawer (M2) --------------------------------------------------
+
+  const editRow = drawer?.kind === "edit" ? rows.find((r) => r.id === drawer.id) : undefined;
+
+  useEffect(() => {
+    const pending = pendingFocusRef.current;
+    if (!pending) return;
+    pendingFocusRef.current = null;
+    const row = rows.find((r) => r.id === pending.id);
+    if (!row) return;
+    if (pending.open) setDrawer({ kind: "edit", id: pending.id });
+    setTimeout(() => {
+      const node = apiRef.current?.getRowNode(String(pending.id));
+      if (node) apiRef.current?.ensureNodeVisible(node, "middle");
+    }, 60);
+  }, [rows]);
+
+  const reloadAfterMove = useCallback(
+    (id: number, dueDate: string, open: boolean) => {
+      loadMonthCounts().then(setMonthCounts).catch(console.error);
+      pendingFocusRef.current = { id, open };
+      const newYm = dueDate.slice(0, 7);
+      if (newYm !== ym) setYm(newYm);
+      else loadMonth(ym).then(setRows).catch((e) => alert(`Failed to reload ${ym}: ${e}`));
+    },
+    [ym],
+  );
+
+  /** drawer persisted a field on `row`; reloadMonth = other rows affected too (due-date move, Rx-wide drug fix) */
+  const onRowEdited = useCallback(
+    (row: RefillRow, reloadMonth: boolean) => {
+      if (reloadMonth) reloadAfterMove(row.id, row.due_date, true);
+      else setRows((prev) => [...prev]); // re-derive filters/shading from the mutated row
+    },
+    [reloadAfterMove],
+  );
+
+  const onCreated = useCallback(
+    (id: number, dueDate: string) => {
+      setDrawer(null);
+      reloadAfterMove(id, dueDate, false);
+    },
+    [reloadAfterMove],
+  );
+
+  /** jump to a refill anywhere (drawer history click, duplicate-open) */
+  const onOpenRefill = useCallback(
+    (id: number, dueDate: string) => {
+      const newYm = dueDate.slice(0, 7);
+      if (newYm !== ym) {
+        pendingFocusRef.current = { id, open: true };
+        setYm(newYm);
+      } else {
+        setDrawer({ kind: "edit", id });
+        const node = apiRef.current?.getRowNode(String(id));
+        if (node) apiRef.current?.ensureNodeVisible(node, "middle");
+      }
+    },
+    [ym],
+  );
+
+  const openCreate = useCallback(
+    () => setDrawer({ kind: "create", dueDate: filters.day ?? `${ym}-01` }),
+    [filters.day, ym],
+  );
+
+  // ----- delete (guarded: right-click menu or drawer button, then a confirm) --
+
+  const deleteRow = useCallback(
+    async (row: RefillRow) => {
+      setCtxMenu(null);
+      const ok = window.confirm(
+        `Delete Rx ${row.rx_number} — ${row.drug_name}, due ${dueLabel(row.due_date)}?\nThis permanently removes the row.`,
+      );
+      if (!ok) return;
+      try {
+        await deleteRefill(row.id);
+      } catch (err) {
+        alert(`Delete failed.\n${err}`);
+        return;
+      }
+      setDrawer((d) => (d?.kind === "edit" && d.id === row.id ? null : d));
+      loadMonthCounts().then(setMonthCounts).catch(console.error);
+      loadMonth(ym).then(setRows).catch((e) => alert(`Failed to reload ${ym}: ${e}`));
+    },
+    [ym],
+  );
+
+  const onCellContextMenu = useCallback((e: CellContextMenuEvent<RefillRow>) => {
+    if (!e.data) return;
+    const ev = e.event as MouseEvent;
+    setCtxMenu({ x: ev.clientX, y: ev.clientY, row: e.data });
+  }, []);
+
+  // any click elsewhere, Esc, or scroll dismisses the context menu
+  useEffect(() => {
+    if (!ctxMenu) return;
+    const dismiss = () => setCtxMenu(null);
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && dismiss();
+    window.addEventListener("mousedown", dismiss);
+    window.addEventListener("wheel", dismiss, { passive: true });
+    window.addEventListener("keydown", onKey);
+    return () => {
+      window.removeEventListener("mousedown", dismiss);
+      window.removeEventListener("wheel", dismiss);
+      window.removeEventListener("keydown", onKey);
+    };
+  }, [ctxMenu]);
 
   // ----- sorting: day separators + due-date lock ---------------------------
 
@@ -270,12 +380,14 @@ export default function MonthView({ lookups }: { lookups: Lookups }) {
         pinned: "left",
         width: 210,
         tooltipField: "drug_name",
+        cellClass: "open-drawer",
       },
       {
         field: "due_date",
         headerName: "Due",
         width: 105,
         valueFormatter: (p) => (p.value ? dueLabel(p.value) : ""),
+        cellClass: "open-drawer",
       },
       {
         field: "insurance_id",
@@ -428,7 +540,13 @@ export default function MonthView({ lookups }: { lookups: Lookups }) {
   }, []);
 
   const onCellClicked = useCallback((e: CellClickedEvent<RefillRow>) => {
-    if (!DROPDOWN_FIELDS.has(e.colDef.field ?? "") || e.rowIndex == null) return;
+    const field = e.colDef.field ?? "";
+    // Drug / Due cells (not editable inline) open the detail drawer (story 2.2)
+    if ((field === "drug_name" || field === "due_date") && e.data) {
+      setDrawer({ kind: "edit", id: e.data.id });
+      return;
+    }
+    if (!DROPDOWN_FIELDS.has(field) || e.rowIndex == null) return;
     e.api.startEditingCell({ rowIndex: e.rowIndex, colKey: e.column.getColId() });
   }, []);
 
@@ -504,6 +622,9 @@ export default function MonthView({ lookups }: { lookups: Lookups }) {
         </div>
 
         <div className="toolbar-group">
+          <button className="add-refill" onClick={openCreate}>
+            ＋ Add refill
+          </button>
           <span className="row-count">
             {filteredRows.length === rows.length ? `${rows.length} rows` : `${filteredRows.length} of ${rows.length} rows`}
           </span>
@@ -522,9 +643,12 @@ export default function MonthView({ lookups }: { lookups: Lookups }) {
         <div className="empty-month">
           <h2>No refills for {ymLabel(ym)} yet</h2>
           <p>
-            Add refills manually (coming with the detail drawer) or import the month's
-            PioneerRX report (v2). The grid fills in as data arrives.
+            Add refills manually or import the month's PioneerRX report (v2). The grid
+            fills in as data arrives.
           </p>
+          <button className="add-refill" onClick={openCreate}>
+            ＋ Add refill
+          </button>
         </div>
       ) : (
         <div className="grid-wrap">
@@ -538,6 +662,8 @@ export default function MonthView({ lookups }: { lookups: Lookups }) {
             onGridReady={onGridReady}
             onSortChanged={onSortChanged}
             onCellClicked={onCellClicked}
+            onCellContextMenu={onCellContextMenu}
+            preventDefaultOnContextMenu={true}
             onCellValueChanged={onCellValueChanged}
             getRowClass={getRowClass}
             stopEditingWhenCellsLoseFocus={true}
@@ -547,6 +673,43 @@ export default function MonthView({ lookups }: { lookups: Lookups }) {
             overlayNoRowsTemplate="No rows match the active filters"
           />
         </div>
+      )}
+
+      {ctxMenu && (
+        <div className="ctx-menu" style={{ left: ctxMenu.x, top: ctxMenu.y }} onMouseDown={(e) => e.stopPropagation()}>
+          <div className="ctx-menu-header">
+            Rx {ctxMenu.row.rx_number} · {ctxMenu.row.drug_name}
+          </div>
+          <button className="ctx-menu-item danger" onClick={() => deleteRow(ctxMenu.row)}>
+            Delete refill…
+          </button>
+        </div>
+      )}
+
+      {drawer?.kind === "create" && (
+        <RefillDrawer
+          mode={{ kind: "create", dueDate: drawer.dueDate }}
+          lookups={lookups}
+          profitMax={profitMax}
+          onClose={() => setDrawer(null)}
+          onRowEdited={onRowEdited}
+          onCreated={onCreated}
+          onOpenRefill={onOpenRefill}
+          onDelete={deleteRow}
+        />
+      )}
+      {drawer?.kind === "edit" && editRow && (
+        <RefillDrawer
+          key={editRow.id}
+          mode={{ kind: "edit", row: editRow }}
+          lookups={lookups}
+          profitMax={profitMax}
+          onClose={() => setDrawer(null)}
+          onRowEdited={onRowEdited}
+          onCreated={onCreated}
+          onOpenRefill={onOpenRefill}
+          onDelete={deleteRow}
+        />
       )}
     </div>
   );

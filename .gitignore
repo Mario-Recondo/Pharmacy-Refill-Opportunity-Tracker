@@ -1,6 +1,9 @@
 # Local working notes
 QUESTIONS.md
 
+# MCP test-harness output (snapshots, screenshots, console logs)
+.playwright-mcp/
+
 # Dependencies / build output
 node_modules/
 dist/
