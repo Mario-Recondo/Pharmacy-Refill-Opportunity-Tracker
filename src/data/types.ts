@@ -35,6 +35,12 @@ export interface Lookups {
   settings: AppSettings;
 }
 
+export interface Drug {
+  id: number;
+  name: string;
+  ndc: string | null;
+}
+
 export interface RefillRow {
   id: number;
   rx_number: string;

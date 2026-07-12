@@ -191,8 +191,404 @@ body {
 }
 
 .empty-month p {
-  margin: 0;
+  margin: 0 0 14px;
   max-width: 420px;
   font-size: 14px;
   line-height: 1.5;
+}
+
+/* ---- toolbar / empty-state Add refill ---- */
+
+.add-refill {
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  padding: 4px 12px;
+  border: 1px solid #2e7d32;
+  border-radius: 6px;
+  background: #e8f5e9;
+  color: #1b5e20;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.add-refill:hover {
+  background: #d3ecd5;
+}
+
+/* Drug / Due cells open the detail drawer */
+.ag-cell.open-drawer {
+  cursor: pointer;
+}
+
+/* ---- detail drawer (M2) ---- */
+
+.drawer {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 400px;
+  max-width: 92vw;
+  display: flex;
+  flex-direction: column;
+  background: #fff;
+  border-left: 1px solid #ccc;
+  box-shadow: -6px 0 22px rgba(0, 0, 0, 0.18);
+  z-index: 40;
+}
+
+.drawer-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 12px 16px 10px;
+  border-bottom: 1px solid #e2e2e2;
+}
+
+.drawer-header h2 {
+  margin: 0;
+  font-size: 17px;
+}
+
+.drawer-subtitle {
+  font-size: 12px;
+  color: #666;
+  margin-top: 2px;
+}
+
+.drawer-close {
+  font-size: 22px;
+  line-height: 1;
+  border: none;
+  background: none;
+  color: #888;
+  cursor: pointer;
+  padding: 0 4px;
+}
+
+.drawer-close:hover {
+  color: #222;
+}
+
+.drawer-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 12px 16px 16px;
+}
+
+.drawer-fields {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.drawer label {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #555;
+}
+
+.drawer input,
+.drawer select,
+.drawer textarea {
+  font: inherit;
+  font-size: 13px;
+  font-weight: 400;
+  color: #222;
+  padding: 5px 8px;
+  border: 1px solid #c5c5c5;
+  border-radius: 6px;
+  background: #fff;
+}
+
+.drawer select:disabled {
+  background: #f2f2f2;
+  color: #bbb;
+}
+
+.drawer .field-pair {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.drawer .field-hint {
+  font-weight: 400;
+  color: #999;
+  font-size: 11px;
+}
+
+.drawer .money {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+/* drug autocomplete */
+
+.drug-field {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.drug-field input {
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.drug-ndc {
+  font-size: 11px;
+  font-weight: 400;
+  color: #999;
+}
+
+.drug-options {
+  position: absolute;
+  top: calc(100% + 2px);
+  left: 0;
+  right: 0;
+  max-height: 260px;
+  overflow-y: auto;
+  background: #fff;
+  border: 1px solid #bbb;
+  border-radius: 6px;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.18);
+  z-index: 10;
+}
+
+.drug-option {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  width: 100%;
+  padding: 6px 10px;
+  font: inherit;
+  font-size: 13px;
+  text-align: left;
+  border: none;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.06);
+  background: #fff;
+  cursor: pointer;
+}
+
+.drug-option:hover,
+.drug-option:focus {
+  background: #eef3fb;
+  outline: none;
+}
+
+.drug-option.create {
+  color: #1b5e20;
+  font-weight: 600;
+}
+
+.drug-create {
+  display: flex;
+  gap: 6px;
+  padding: 8px 10px;
+  background: #f6faf6;
+}
+
+.drug-create input {
+  flex: 1;
+  min-width: 0;
+}
+
+.drug-create button {
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 4px 10px;
+  border: 1px solid #2e7d32;
+  border-radius: 6px;
+  background: #e8f5e9;
+  color: #1b5e20;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.drug-empty {
+  padding: 8px 10px;
+  font-size: 12px;
+  color: #888;
+}
+
+/* notes + hover popup (story 2.2) */
+
+.notes-wrap {
+  position: relative;
+  margin-top: 12px;
+}
+
+.notes-wrap textarea {
+  width: 100%;
+  box-sizing: border-box;
+  resize: vertical;
+}
+
+.notes-bubble {
+  position: absolute;
+  right: 0;
+  bottom: calc(100% + 6px);
+  max-width: 340px;
+  max-height: 300px;
+  overflow-y: auto;
+  padding: 10px 12px;
+  font-size: 13px;
+  line-height: 1.45;
+  white-space: pre-wrap;
+  background: #fffbe8;
+  border: 1px solid #d9c86a;
+  border-radius: 8px;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.2);
+  z-index: 20;
+}
+
+/* duplicate warning (story 2.1) */
+
+.dup-warning {
+  margin-bottom: 12px;
+  padding: 10px 12px;
+  border: 1px solid #ef9a9a;
+  border-radius: 8px;
+  background: #fdecea;
+  font-size: 13px;
+}
+
+.dup-warning p {
+  margin: 0 0 8px;
+}
+
+.dup-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.dup-actions button {
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 4px 10px;
+  border: 1px solid #c62828;
+  border-radius: 6px;
+  background: #fff;
+  color: #c62828;
+  cursor: pointer;
+}
+
+.dup-actions button:hover {
+  background: #fbe3e1;
+}
+
+/* history (story 2.3) */
+
+.history {
+  margin-top: 18px;
+  border-top: 1px solid #e2e2e2;
+  padding-top: 10px;
+}
+
+.history h3 {
+  margin: 0 0 8px;
+  font-size: 13px;
+  color: #555;
+}
+
+.history-empty {
+  font-size: 12px;
+  color: #999;
+}
+
+.history-row {
+  display: block;
+  width: 100%;
+  margin-bottom: 6px;
+  padding: 8px 10px;
+  font: inherit;
+  text-align: left;
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  background: #fafafa;
+  cursor: pointer;
+}
+
+.history-row:hover {
+  border-color: #3f51b5;
+  background: #f2f4fb;
+}
+
+.history-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 3px;
+}
+
+.history-date {
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.history-status {
+  font-size: 11px;
+  font-weight: 700;
+  padding: 1px 8px;
+  border-radius: 8px;
+}
+
+.history-line {
+  font-size: 12px;
+  color: #555;
+}
+
+.history-notes {
+  margin-top: 3px;
+  font-size: 12px;
+  color: #777;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* create-mode footer */
+
+.drawer-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 10px 16px;
+  border-top: 1px solid #e2e2e2;
+  background: #fafafa;
+}
+
+.drawer-footer button {
+  font: inherit;
+  font-size: 13px;
+  padding: 6px 14px;
+  border: 1px solid #c5c5c5;
+  border-radius: 6px;
+  background: #fff;
+  cursor: pointer;
+}
+
+.drawer-footer button.primary {
+  border-color: #2e7d32;
+  background: #2e7d32;
+  color: #fff;
+  font-weight: 600;
+}
+
+.drawer-footer button.primary:disabled {
+  border-color: #bbb;
+  background: #ddd;
+  color: #888;
+  cursor: not-allowed;
 }
