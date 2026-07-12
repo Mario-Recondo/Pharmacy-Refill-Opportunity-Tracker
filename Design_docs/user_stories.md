@@ -115,6 +115,14 @@ Acceptance criteria:
 - Known limitation, accepted: when a prescription is renewed under a new Rx number, its history starts fresh. This is correct behavior given the data available.
 - History is read-only from the drawer; clicking an entry navigates to that row.
 
+**2.4 — Delete a refill**
+As a technician, I want to delete a row that shouldn't exist (wrong entry, test data), but not so easily that a stray click can destroy real work.
+
+Acceptance criteria:
+- No one-click delete anywhere. The delete action lives behind a right-click on the row (context menu) and at the bottom of the detail drawer.
+- Either path asks for confirmation naming the exact row (Rx #, drug, due date) before anything is removed.
+- Deletion is permanent (no undo in v1); the row disappears from the grid, month counts, history, and — once built — Opportunities/Overdue immediately.
+
 ---
 
 ## Epic 3: Profit Visibility & Opportunities (v1)

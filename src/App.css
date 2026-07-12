@@ -558,6 +558,56 @@ body {
   text-overflow: ellipsis;
 }
 
+/* right-click row menu */
+
+.ctx-menu {
+  position: fixed;
+  min-width: 200px;
+  background: #fff;
+  border: 1px solid #bbb;
+  border-radius: 8px;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.22);
+  z-index: 60;
+  overflow: hidden;
+}
+
+.ctx-menu-header {
+  padding: 7px 12px;
+  font-size: 11px;
+  font-weight: 600;
+  color: #777;
+  background: #f6f6f6;
+  border-bottom: 1px solid #e2e2e2;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 320px;
+}
+
+.ctx-menu-item {
+  display: block;
+  width: 100%;
+  padding: 8px 12px;
+  font: inherit;
+  font-size: 13px;
+  text-align: left;
+  border: none;
+  background: #fff;
+  cursor: pointer;
+}
+
+.ctx-menu-item:hover {
+  background: #f0f0f0;
+}
+
+.ctx-menu-item.danger {
+  color: #c62828;
+}
+
+.ctx-menu-item.danger:hover {
+  background: #fdecea;
+}
+
 /* create-mode footer */
 
 .drawer-footer {
@@ -591,4 +641,17 @@ body {
   background: #ddd;
   color: #888;
   cursor: not-allowed;
+}
+
+.drawer-footer.edit {
+  justify-content: flex-start;
+}
+
+.drawer-footer button.delete {
+  border-color: #ef9a9a;
+  color: #c62828;
+}
+
+.drawer-footer button.delete:hover {
+  background: #fdecea;
 }

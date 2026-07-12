@@ -130,6 +130,12 @@ export async function findOrCreateDrug(name: string, ndc: string | null): Promis
   return res.lastInsertId as number;
 }
 
+/** Permanent removal — callers must confirm with the user first (destructive action, design rule). */
+export async function deleteRefill(id: number): Promise<void> {
+  const db = await getDb();
+  await db.execute("DELETE FROM refills WHERE id = $1", [id]);
+}
+
 export interface NewRefill {
   rx_number: string;
   drug_id: number;

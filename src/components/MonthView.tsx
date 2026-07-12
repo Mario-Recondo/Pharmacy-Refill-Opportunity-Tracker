@@ -6,6 +6,7 @@ import {
   themeQuartz,
   type CellClassParams,
   type CellClickedEvent,
+  type CellContextMenuEvent,
   type CellValueChangedEvent,
   type ColDef,
   type GridApi,
@@ -15,7 +16,7 @@ import {
   type ValueFormatterParams,
   type ValueParserParams,
 } from "ag-grid-community";
-import { loadMonth, loadMonthCounts, updateRefillField } from "../data/refills";
+import { deleteRefill, loadMonth, loadMonthCounts, updateRefillField } from "../data/refills";
 import { STATUSES, type EditableField, type Lookup, type Lookups, type RefillRow, type RefillStatus } from "../data/types";
 import { copayColor, formatMoney, profitStyle, textColorFor } from "../lib/colors";
 import { noteQualifiesForCallNote } from "../lib/rules";
@@ -76,6 +77,8 @@ export default function MonthView({ lookups }: { lookups: Lookups }) {
   const [showSecondary, setShowSecondary] = useState(false);
   const [locked, setLocked] = useState(false);
   const [drawer, setDrawer] = useState<{ kind: "edit"; id: number } | { kind: "create"; dueDate: string } | null>(null);
+  // right-click row menu (delete lives here — deliberately not a one-click affordance)
+  const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number; row: RefillRow } | null>(null);
   // row to focus (and maybe open) once its month's rows are loaded — history jumps, due-date moves, fresh creates
   const pendingFocusRef = useRef<{ id: number; open: boolean } | null>(null);
 
@@ -193,6 +196,49 @@ export default function MonthView({ lookups }: { lookups: Lookups }) {
     () => setDrawer({ kind: "create", dueDate: filters.day ?? `${ym}-01` }),
     [filters.day, ym],
   );
+
+  // ----- delete (guarded: right-click menu or drawer button, then a confirm) --
+
+  const deleteRow = useCallback(
+    async (row: RefillRow) => {
+      setCtxMenu(null);
+      const ok = window.confirm(
+        `Delete Rx ${row.rx_number} — ${row.drug_name}, due ${dueLabel(row.due_date)}?\nThis permanently removes the row.`,
+      );
+      if (!ok) return;
+      try {
+        await deleteRefill(row.id);
+      } catch (err) {
+        alert(`Delete failed.\n${err}`);
+        return;
+      }
+      setDrawer((d) => (d?.kind === "edit" && d.id === row.id ? null : d));
+      loadMonthCounts().then(setMonthCounts).catch(console.error);
+      loadMonth(ym).then(setRows).catch((e) => alert(`Failed to reload ${ym}: ${e}`));
+    },
+    [ym],
+  );
+
+  const onCellContextMenu = useCallback((e: CellContextMenuEvent<RefillRow>) => {
+    if (!e.data) return;
+    const ev = e.event as MouseEvent;
+    setCtxMenu({ x: ev.clientX, y: ev.clientY, row: e.data });
+  }, []);
+
+  // any click elsewhere, Esc, or scroll dismisses the context menu
+  useEffect(() => {
+    if (!ctxMenu) return;
+    const dismiss = () => setCtxMenu(null);
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && dismiss();
+    window.addEventListener("mousedown", dismiss);
+    window.addEventListener("wheel", dismiss, { passive: true });
+    window.addEventListener("keydown", onKey);
+    return () => {
+      window.removeEventListener("mousedown", dismiss);
+      window.removeEventListener("wheel", dismiss);
+      window.removeEventListener("keydown", onKey);
+    };
+  }, [ctxMenu]);
 
   // ----- sorting: day separators + due-date lock ---------------------------
 
@@ -616,6 +662,8 @@ export default function MonthView({ lookups }: { lookups: Lookups }) {
             onGridReady={onGridReady}
             onSortChanged={onSortChanged}
             onCellClicked={onCellClicked}
+            onCellContextMenu={onCellContextMenu}
+            preventDefaultOnContextMenu={true}
             onCellValueChanged={onCellValueChanged}
             getRowClass={getRowClass}
             stopEditingWhenCellsLoseFocus={true}
@@ -624,6 +672,17 @@ export default function MonthView({ lookups }: { lookups: Lookups }) {
             tooltipShowDelay={400}
             overlayNoRowsTemplate="No rows match the active filters"
           />
+        </div>
+      )}
+
+      {ctxMenu && (
+        <div className="ctx-menu" style={{ left: ctxMenu.x, top: ctxMenu.y }} onMouseDown={(e) => e.stopPropagation()}>
+          <div className="ctx-menu-header">
+            Rx {ctxMenu.row.rx_number} · {ctxMenu.row.drug_name}
+          </div>
+          <button className="ctx-menu-item danger" onClick={() => deleteRow(ctxMenu.row)}>
+            Delete refill…
+          </button>
         </div>
       )}
 
@@ -636,6 +695,7 @@ export default function MonthView({ lookups }: { lookups: Lookups }) {
           onRowEdited={onRowEdited}
           onCreated={onCreated}
           onOpenRefill={onOpenRefill}
+          onDelete={deleteRow}
         />
       )}
       {drawer?.kind === "edit" && editRow && (
@@ -648,6 +708,7 @@ export default function MonthView({ lookups }: { lookups: Lookups }) {
           onRowEdited={onRowEdited}
           onCreated={onCreated}
           onOpenRefill={onOpenRefill}
+          onDelete={deleteRow}
         />
       )}
     </div>

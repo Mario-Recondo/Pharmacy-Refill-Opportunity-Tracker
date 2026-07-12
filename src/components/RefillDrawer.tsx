@@ -27,6 +27,8 @@ interface DrawerProps {
   onCreated: (id: number, dueDate: string) => void;
   /** jump to another refill row (history click, duplicate-open) */
   onOpenRefill: (id: number, dueDate: string) => void;
+  /** guarded delete — the handler confirms with the user before removing anything */
+  onDelete: (row: RefillRow) => void;
 }
 
 const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
@@ -243,7 +245,7 @@ interface Draft {
   notes: string;
 }
 
-export default function RefillDrawer({ mode, lookups, profitMax, onClose, onRowEdited, onCreated, onOpenRefill }: DrawerProps) {
+export default function RefillDrawer({ mode, lookups, profitMax, onClose, onRowEdited, onCreated, onOpenRefill, onDelete }: DrawerProps) {
   const editRow = mode.kind === "edit" ? mode.row : null;
   const [, bump] = useReducer((x: number) => x + 1, 0); // re-render after an aborted save so controlled selects snap back
 
@@ -779,11 +781,17 @@ export default function RefillDrawer({ mode, lookups, profitMax, onClose, onRowE
         )}
       </div>
 
-      {!editRow && (
+      {!editRow ? (
         <footer className="drawer-footer">
           <button onClick={onClose}>Cancel</button>
           <button className="primary" disabled={!draftValid || saving} onClick={saveDraft} title={draftValid ? undefined : "Rx #, drug and due date are required"}>
             {saving ? "Adding…" : "Add refill"}
+          </button>
+        </footer>
+      ) : (
+        <footer className="drawer-footer edit">
+          <button className="delete" onClick={() => onDelete(editRow)} title="Asks for confirmation first">
+            Delete refill…
           </button>
         </footer>
       )}
