@@ -29,6 +29,32 @@ export async function loadRxHistory(rxNumber: string): Promise<RefillRow[]> {
   );
 }
 
+export interface OpportunitySet {
+  rows: RefillRow[];
+  /** latest due_date anywhere in the data — drives the data-horizon hint (story 3.3) */
+  maxDue: string | null;
+}
+
+/**
+ * High-value refills coming due (story 3.3): Pending, no verified new profit yet,
+ * last verified profit (old_profit) at or above the alert threshold, due inside
+ * [fromIso, toIso]. Highest last profit first.
+ */
+export async function loadOpportunities(fromIso: string, toIso: string, minProfit: number): Promise<OpportunitySet> {
+  const db = await getDb();
+  const [rows, mx] = await Promise.all([
+    db.select<RefillRow[]>(
+      `${ROW_SELECT}
+       WHERE r.status = 'Pending' AND r.new_profit IS NULL AND r.old_profit >= $1
+         AND r.due_date >= $2 AND r.due_date <= $3
+       ORDER BY r.old_profit DESC, r.due_date, r.id`,
+      [minProfit, fromIso, toIso],
+    ),
+    db.select<{ max_due: string | null }[]>("SELECT MAX(due_date) AS max_due FROM refills"),
+  ]);
+  return { rows, maxDue: mx[0]?.max_due ?? null };
+}
+
 /** Rows per month ("2026-07" → count), for the month picker's data-presence indicators. */
 export async function loadMonthCounts(): Promise<Map<string, number>> {
   const db = await getDb();

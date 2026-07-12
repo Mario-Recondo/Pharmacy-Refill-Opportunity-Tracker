@@ -21,6 +21,7 @@ import { STATUSES, type EditableField, type Lookup, type Lookups, type RefillRow
 import { copayColor, formatMoney, profitStyle, textColorFor } from "../lib/colors";
 import { noteQualifiesForCallNote } from "../lib/rules";
 import { PillSelectEditor, RefillNoteRenderer, RxCopyRenderer, type GridCtx, type PillItem } from "./gridParts";
+import OpportunitiesPanel from "./OpportunitiesPanel";
 import RefillDrawer from "./RefillDrawer";
 
 ModuleRegistry.registerModules([AllCommunityModule]);
@@ -639,6 +640,7 @@ export default function MonthView({ lookups }: { lookups: Lookups }) {
         </div>
       </div>
 
+      <div className="month-body">
       {rows.length === 0 ? (
         <div className="empty-month">
           <h2>No refills for {ymLabel(ym)} yet</h2>
@@ -674,6 +676,8 @@ export default function MonthView({ lookups }: { lookups: Lookups }) {
           />
         </div>
       )}
+      <OpportunitiesPanel lookups={lookups} rows={rows} onOpenRefill={onOpenRefill} />
+      </div>
 
       {ctxMenu && (
         <div className="ctx-menu" style={{ left: ctxMenu.x, top: ctxMenu.y }} onMouseDown={(e) => e.stopPropagation()}>
