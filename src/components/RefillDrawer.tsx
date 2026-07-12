@@ -38,6 +38,17 @@ function longDate(iso: string): string {
   return `${WEEKDAYS[new Date(y, m - 1, d).getDay()]} ${m}/${d}/${y}`;
 }
 
+function daysApart(a: string, b: string): number {
+  return Math.round(Math.abs(new Date(a).getTime() - new Date(b).getTime()) / 86_400_000);
+}
+
+/**
+ * Two rows of the same Rx due closer than this are probably the same refill
+ * cycle (due-date drift), not consecutive cycles — cycles run ~28/30/90 days.
+ * Mirrors the v2 import probable-duplicate rule (design doc §6).
+ */
+const NEAR_DUP_DAYS = 21;
+
 // ---------------------------------------------------------------------------
 // Small form controls
 // ---------------------------------------------------------------------------
@@ -284,6 +295,8 @@ export default function RefillDrawer({ mode, lookups, profitMax, onClose, onRowE
   const [dup, setDup] = useState<{ id: number; dueDate: string } | null>(null);
   // create-mode conflict: the entered Rx # already exists under a different medication
   const [drugConflict, setDrugConflict] = useState<{ drug_id: number; drug_name: string; ndc: string | null } | null>(null);
+  // create-mode probable duplicate: the Rx already has a row due within NEAR_DUP_DAYS (same cycle, drifted date)
+  const [nearDup, setNearDup] = useState<{ id: number; due_date: string; status: string; days: number } | null>(null);
   const [saving, setSaving] = useState(false);
   const dueInputRef = useRef<HTMLInputElement>(null);
   const rxInputRef = useRef<HTMLInputElement>(null);
@@ -395,7 +408,7 @@ export default function RefillDrawer({ mode, lookups, profitMax, onClose, onRowE
 
   const draftValid = draft.rx_number.trim() !== "" && draft.drug !== null && draft.due_date !== "";
 
-  const saveDraft = async () => {
+  const saveDraft = async (skipNearDupCheck = false) => {
     if (!draftValid || saving) return;
     setSaving(true);
     try {
@@ -414,6 +427,20 @@ export default function RefillDrawer({ mode, lookups, profitMax, onClose, onRowE
         return;
       }
       setDrugConflict(null);
+      // probable duplicate: same Rx due within NEAR_DUP_DAYS is the same cycle with a drifted
+      // date, not the next refill — warn, with an explicit override (never silent)
+      if (!skipNearDupCheck) {
+        const siblings = await loadRxHistory(rx);
+        const near = siblings
+          .map((s) => ({ s, days: daysApart(s.due_date, draft.due_date) }))
+          .filter((x) => x.days <= NEAR_DUP_DAYS)
+          .sort((a, b) => a.days - b.days)[0];
+        if (near) {
+          setNearDup({ id: near.s.id, due_date: near.s.due_date, status: near.s.status, days: near.days });
+          return;
+        }
+      }
+      setNearDup(null);
       const drugId = draft.drug!.kind === "existing" ? draft.drug!.drug.id : await findOrCreateDrug(draft.drug!.name, draft.drug!.ndc);
       const id = await createRefill({
         rx_number: draft.rx_number.trim(),
@@ -555,6 +582,26 @@ export default function RefillDrawer({ mode, lookups, profitMax, onClose, onRowE
                 }}
               >
                 Fix Rx #
+              </button>
+            </div>
+          </div>
+        )}
+
+        {nearDup && (
+          <div className="dup-warning">
+            <p>
+              Probable duplicate: Rx # {draft.rx_number.trim()} already has a row due {longDate(nearDup.due_date)} ({nearDup.status}),{" "}
+              {nearDup.days} day{nearDup.days === 1 ? "" : "s"} from this one — refill cycles are usually ~28+ days apart.
+            </p>
+            <div className="dup-actions">
+              <button onClick={() => onOpenRefill(nearDup.id, nearDup.due_date)}>Open existing row</button>
+              <button
+                onClick={() => {
+                  setNearDup(null);
+                  void saveDraft(true);
+                }}
+              >
+                Create anyway
               </button>
             </div>
           </div>
@@ -784,7 +831,7 @@ export default function RefillDrawer({ mode, lookups, profitMax, onClose, onRowE
       {!editRow ? (
         <footer className="drawer-footer">
           <button onClick={onClose}>Cancel</button>
-          <button className="primary" disabled={!draftValid || saving} onClick={saveDraft} title={draftValid ? undefined : "Rx #, drug and due date are required"}>
+          <button className="primary" disabled={!draftValid || saving} onClick={() => saveDraft()} title={draftValid ? undefined : "Rx #, drug and due date are required"}>
             {saving ? "Adding…" : "Add refill"}
           </button>
         </footer>

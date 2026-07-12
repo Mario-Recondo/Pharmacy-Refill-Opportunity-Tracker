@@ -97,6 +97,7 @@ Acceptance criteria:
 - The drug field autocompletes against existing drugs; entering an unknown name creates a new drug (NDC optional, since compounds have none).
 - Duplicate protection: entering an Rx # + due date pair that already exists warns me and offers to open the existing row instead.
 - Rx-drug consistency (one Rx # = one medication, design doc §5): entering an Rx # that already exists under a different medication warns me and offers to use the existing medication or fix the Rx # — never saves the mismatch.
+- Probable-duplicate guard (design doc §6.1): if the Rx already has a row due within 21 days of the new one, saving warns me (same refill cycle, drifted date) and offers to open the existing row or explicitly create anyway.
 
 **2.2 — See everything about one refill**
 As a technician, I want to click a row and see all its details in a side drawer, so that I can work one prescription without losing my place in the grid.
