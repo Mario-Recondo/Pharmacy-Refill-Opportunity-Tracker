@@ -90,17 +90,256 @@ body {
   white-space: nowrap;
 }
 
-/* ---- grid ---- */
+/* ---- grid + opportunities sidebar ---- */
+
+.month-body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+}
 
 .grid-wrap {
   flex: 1;
+  min-width: 0;
   min-height: 0;
   padding: 8px 12px 12px;
+}
+
+/* ---- opportunities panel (story 3.3) ---- */
+
+.opps {
+  width: 264px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  border-left: 1px solid #ddd;
+  background: #fff;
+}
+
+.opps.collapsed {
+  width: 40px;
+}
+
+.opps-rail {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 0;
+  border: none;
+  background: #fff;
+  cursor: pointer;
+}
+
+.opps-rail:hover {
+  background: #f0f0f0;
+}
+
+.opps-rail-count {
+  font-size: 12px;
+  font-weight: 700;
+  min-width: 22px;
+  padding: 2px 0;
+  border-radius: 10px;
+  background: #1b5e20;
+  color: #fff;
+}
+
+.opps-rail-label {
+  writing-mode: vertical-rl;
+  font-size: 12px;
+  font-weight: 600;
+  color: #666;
+  letter-spacing: 0.04em;
+}
+
+.opps-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 6px;
+  padding: 10px 12px 8px;
+  border-bottom: 1px solid #e2e2e2;
+}
+
+.opps-header h3 {
+  margin: 0;
+  font-size: 14px;
+}
+
+.opps-params {
+  font-size: 11px;
+  color: #888;
+}
+
+.opps-collapse {
+  font: inherit;
+  font-size: 14px;
+  padding: 2px 8px;
+  border: 1px solid #c5c5c5;
+  border-radius: 6px;
+  background: #fff;
+  color: #666;
+  cursor: pointer;
+}
+
+.opps-collapse:hover {
+  background: #f0f0f0;
+}
+
+.opps-cards {
+  flex: 1;
+  overflow-y: auto;
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.opp-card {
+  padding: 9px 11px;
+  border: 1px solid #ddd;
+  border-left: 4px solid #2e7d32;
+  border-radius: 8px;
+  background: #fafafa;
+  cursor: pointer;
+}
+
+.opp-card:hover {
+  border-color: #2e7d32;
+  background: #f1f8f1;
+}
+
+.opp-top {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.opp-drug {
+  font-size: 12px;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.opp-profit {
+  font-size: 15px;
+  font-weight: 700;
+  color: #1b5e20;
+  font-variant-numeric: tabular-nums;
+}
+
+.opp-sub {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 2px;
+}
+
+.opp-rx {
+  font-size: 12px;
+  color: #333;
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+}
+
+.opp-rx:hover {
+  text-decoration: underline;
+}
+
+.opp-rx.copied {
+  color: #2e7d32;
+  font-weight: 600;
+}
+
+.opp-label {
+  font-size: 10px;
+  color: #999;
+  font-style: italic;
+  white-space: nowrap;
+}
+
+.opp-bottom {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 5px;
+}
+
+.opp-due {
+  font-size: 12px;
+  font-weight: 600;
+  color: #555;
+}
+
+.opp-note {
+  font-size: 11px;
+  padding: 1px 8px;
+  border-radius: 8px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.opp-actions {
+  display: none;
+  margin-top: 6px;
+}
+
+.opp-card:hover .opp-actions {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.opp-actions button {
+  font: inherit;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border: 1px solid #c5c5c5;
+  border-radius: 6px;
+  background: #fff;
+  color: #444;
+  cursor: pointer;
+}
+
+.opp-actions button:hover {
+  border-color: #2e7d32;
+  color: #1b5e20;
+  background: #e8f5e9;
+}
+
+.opps-empty,
+.opps-horizon {
+  font-size: 12px;
+  color: #888;
+  line-height: 1.45;
+  padding: 4px 2px;
+}
+
+.opps-horizon {
+  border: 1px dashed #c5b46a;
+  border-radius: 8px;
+  background: #fffbe8;
+  color: #7a6a1f;
+  padding: 8px 10px;
 }
 
 /* day separator between date groups — only rendered in due-date order */
 .ag-row.day-break {
   border-top: 3px solid #3f51b5 !important;
+}
+
+/* row matching the hovered Opportunities card — inset outline shows over colored cells */
+.ag-row.opp-hover {
+  background-color: #fff3cd !important;
+  box-shadow: inset 0 0 0 2px #e6a700;
 }
 
 .rx-copy {
