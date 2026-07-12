@@ -37,11 +37,17 @@ function OppCard({
   today,
   lookups,
   onOpen,
+  onHover,
+  onGoTo,
 }: {
   row: RefillRow;
   today: string;
   lookups: Lookups;
   onOpen: (id: number, dueDate: string) => void;
+  /** hover highlights the matching grid row; null on leave */
+  onHover: (id: number | null) => void;
+  /** scroll the grid to the row (no drawer) — for rows out of sight */
+  onGoTo: (id: number, dueDate: string) => void;
 }) {
   const note = lookups.refillNotes.find((n) => n.id === row.refill_note_id);
   const [copied, setCopied] = useState(false);
@@ -61,7 +67,13 @@ function OppCard({
   };
 
   return (
-    <div className="opp-card" onClick={() => onOpen(row.id, row.due_date)} title="Open in the detail drawer">
+    <div
+      className="opp-card"
+      onClick={() => onOpen(row.id, row.due_date)}
+      onMouseEnter={() => onHover(row.id)}
+      onMouseLeave={() => onHover(null)}
+      title="Open in the detail drawer"
+    >
       <div className="opp-top">
         <span className="opp-drug">{row.drug_name}</span>
         <span className="opp-profit">{formatMoney(row.old_profit)}</span>
@@ -82,6 +94,17 @@ function OppCard({
           </span>
         )}
       </div>
+      <div className="opp-actions">
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation(); // locate only — card click is what opens the drawer
+            onGoTo(row.id, row.due_date);
+          }}
+        >
+          ↧ Go to row
+        </button>
+      </div>
     </div>
   );
 }
@@ -90,11 +113,15 @@ export default function OpportunitiesPanel({
   lookups,
   rows,
   onOpenRefill,
+  onHoverRow,
+  onGoToRow,
 }: {
   lookups: Lookups;
   /** the month view's rows — identity changes on every edit/create/delete, which re-queries the panel */
   rows: RefillRow[];
   onOpenRefill: (id: number, dueDate: string) => void;
+  onHoverRow: (id: number | null) => void;
+  onGoToRow: (id: number, dueDate: string) => void;
 }) {
   const [collapsed, setCollapsed] = useState(false);
   const [opps, setOpps] = useState<RefillRow[]>([]);
@@ -143,7 +170,7 @@ export default function OpportunitiesPanel({
       </header>
       <div className="opps-cards">
         {opps.map((r) => (
-          <OppCard key={r.id} row={r} today={today} lookups={lookups} onOpen={onOpenRefill} />
+          <OppCard key={r.id} row={r} today={today} lookups={lookups} onOpen={onOpenRefill} onHover={onHoverRow} onGoTo={onGoToRow} />
         ))}
         {opps.length === 0 && !horizonShort && (
           <div className="opps-empty">Nothing high-value due through {shortDate(horizon)}.</div>

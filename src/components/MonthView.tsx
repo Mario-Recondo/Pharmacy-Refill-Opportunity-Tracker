@@ -145,9 +145,12 @@ export default function MonthView({ lookups }: { lookups: Lookups }) {
     if (pending.open) setDrawer({ kind: "edit", id: pending.id });
     setTimeout(() => {
       const node = apiRef.current?.getRowNode(String(pending.id));
-      if (node) apiRef.current?.ensureNodeVisible(node, "middle");
+      if (node) {
+        apiRef.current?.ensureNodeVisible(node, "middle");
+        apiRef.current?.flashCells({ rowNodes: [node] });
+      }
     }, 60);
-  }, [rows]);
+  }, [rows, filters]);
 
   const reloadAfterMove = useCallback(
     (id: number, dueDate: string, open: boolean) => {
@@ -196,6 +199,30 @@ export default function MonthView({ lookups }: { lookups: Lookups }) {
   const openCreate = useCallback(
     () => setDrawer({ kind: "create", dueDate: filters.day ?? `${ym}-01` }),
     [filters.day, ym],
+  );
+
+  /** scroll the grid to a row and flash it, without opening the drawer — switches month / clears filters if needed */
+  const goToRow = useCallback(
+    (id: number, dueDate: string) => {
+      const newYm = dueDate.slice(0, 7);
+      if (newYm !== ym) {
+        pendingFocusRef.current = { id, open: false };
+        setYm(newYm);
+        return;
+      }
+      if (!filteredRows.some((r) => r.id === id)) {
+        // in this month but hidden by the quick filters — reveal it
+        pendingFocusRef.current = { id, open: false };
+        setFilters(NO_FILTERS);
+        return;
+      }
+      const node = apiRef.current?.getRowNode(String(id));
+      if (node) {
+        apiRef.current?.ensureNodeVisible(node, "middle");
+        apiRef.current?.flashCells({ rowNodes: [node] });
+      }
+    },
+    [ym, filteredRows],
   );
 
   // ----- delete (guarded: right-click menu or drawer button, then a confirm) --
@@ -305,11 +332,31 @@ export default function MonthView({ lookups }: { lookups: Lookups }) {
     api.redrawRows();
   };
 
-  // day separators only while the grid is in due-date order (story 1.1)
-  const getRowClass = useCallback((params: RowClassParams<RefillRow>): string | undefined => {
-    if (!dateOrderRef.current || params.node.rowIndex == null || params.node.rowIndex === 0) return undefined;
-    const prev = params.api.getDisplayedRowAtIndex(params.node.rowIndex - 1);
-    return prev?.data && params.data && prev.data.due_date !== params.data.due_date ? "day-break" : undefined;
+  // hovering an Opportunities card highlights its grid row (checked at draw time)
+  const oppHoverIdRef = useRef<number | null>(null);
+
+  const getRowClass = useCallback((params: RowClassParams<RefillRow>): string[] | undefined => {
+    const classes: string[] = [];
+    // day separators only while the grid is in due-date order (story 1.1)
+    if (dateOrderRef.current && params.node.rowIndex != null && params.node.rowIndex > 0) {
+      const prev = params.api.getDisplayedRowAtIndex(params.node.rowIndex - 1);
+      if (prev?.data && params.data && prev.data.due_date !== params.data.due_date) classes.push("day-break");
+    }
+    if (params.data && params.data.id === oppHoverIdRef.current) classes.push("opp-hover");
+    return classes.length ? classes : undefined;
+  }, []);
+
+  const setOppHover = useCallback((id: number | null) => {
+    const prev = oppHoverIdRef.current;
+    if (prev === id) return;
+    oppHoverIdRef.current = id;
+    const api = apiRef.current;
+    if (!api) return;
+    const nodes = [prev, id]
+      .filter((v): v is number => v != null)
+      .map((v) => api.getRowNode(String(v)))
+      .filter((n) => n != null);
+    if (nodes.length) api.redrawRows({ rowNodes: nodes });
   }, []);
 
   // ----- edits: immediate persistence + business rules ---------------------
@@ -676,7 +723,13 @@ export default function MonthView({ lookups }: { lookups: Lookups }) {
           />
         </div>
       )}
-      <OpportunitiesPanel lookups={lookups} rows={rows} onOpenRefill={onOpenRefill} />
+      <OpportunitiesPanel
+        lookups={lookups}
+        rows={rows}
+        onOpenRefill={onOpenRefill}
+        onHoverRow={setOppHover}
+        onGoToRow={goToRow}
+      />
       </div>
 
       {ctxMenu && (
