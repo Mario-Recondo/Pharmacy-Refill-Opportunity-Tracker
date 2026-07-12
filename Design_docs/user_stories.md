@@ -152,6 +152,7 @@ Acceptance criteria:
 - "Last verified profit" is the row's `old_profit` — what the pharmacy earned the last time this prescription was sold.
 - Each card shows drug, Rx # (copyable), due date, last profit clearly labeled as "last fill / unverified," and the current refill note.
 - Clicking a card opens that row's detail drawer.
+- Hovering a card highlights the corresponding grid row; a "Go to row" action on the card scrolls the grid to the row (switching month / clearing filters if it's out of view) without opening the drawer.
 - A card leaves the panel when its row gains a verified New Profit or leaves `Pending`.
 - When the look-ahead window extends past the last populated date, the panel says so (e.g., "No data beyond Jul 31") instead of appearing silently empty.
 
