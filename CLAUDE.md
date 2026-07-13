@@ -32,3 +32,4 @@ Desktop tool (single-user, offline) for a pharmacy technician at an independent 
 - Lookup vocabularies (insurances, refill/call notes) are data, editable in Settings — never hardcode them in components
 - All edits persist immediately; no Save buttons. Confirmations only for destructive actions
 - Git workflow (since M1): new work goes on a feature branch → push the branch → open a PR; never commit directly to `main`. Commit messages and PR text carry no AI-attribution lines (no "Co-Authored-By: Claude" or similar). Docs and decisions are folded into Design_docs as they're made
+- A decision that is costly to reverse, surprising to a future reader, AND a genuine trade-off gets an ADR in `Design_docs/adr/` (template + criteria in its README), written in the same PR as the decision. The design doc stays the spec of what is; ADRs record why
