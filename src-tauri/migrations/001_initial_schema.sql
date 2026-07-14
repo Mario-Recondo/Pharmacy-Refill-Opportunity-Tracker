@@ -7,22 +7,36 @@ CREATE TABLE drugs (
   UNIQUE (name, ndc)
 );
 
+-- Master-brand groups (design doc §4.3): a plan belongs to at most one group;
+-- the group's logo (bundled asset key) renders next to the plan name. Groups
+-- are data; the logo set is fixed at build time. NULL logo = plain cells.
+CREATE TABLE insurance_groups (
+  id         INTEGER PRIMARY KEY,
+  name       TEXT NOT NULL UNIQUE,
+  logo       TEXT,
+  sort_order INTEGER NOT NULL DEFAULT 0,
+  active     INTEGER NOT NULL DEFAULT 1
+);
+
 CREATE TABLE insurances (
-  id                   INTEGER PRIMARY KEY,
-  name                 TEXT NOT NULL UNIQUE,
-  color                TEXT NOT NULL,
-  is_medicare_medicaid INTEGER NOT NULL DEFAULT 0, -- drives the uniform Light Blue group color
-  sort_order           INTEGER NOT NULL DEFAULT 0,
-  active               INTEGER NOT NULL DEFAULT 1  -- deactivated: stays on historical rows, leaves dropdowns
+  id          INTEGER PRIMARY KEY,
+  name        TEXT NOT NULL UNIQUE,
+  group_id    INTEGER REFERENCES insurance_groups (id), -- NULL = ungrouped (renders plain)
+  is_medicare INTEGER NOT NULL DEFAULT 0, -- designation flags, not groups: "(Medicare)"/"(Medicaid)"
+  is_medicaid INTEGER NOT NULL DEFAULT 0, -- name suffix; a plan can carry both
+  sort_order  INTEGER NOT NULL DEFAULT 0,
+  active      INTEGER NOT NULL DEFAULT 1  -- deactivated: stays on historical rows, leaves dropdowns
 );
 
 CREATE TABLE refill_notes (
-  id         INTEGER PRIMARY KEY,
-  name       TEXT NOT NULL UNIQUE,
-  color      TEXT NOT NULL,
-  meaning    TEXT NOT NULL DEFAULT '', -- tooltip text
-  sort_order INTEGER NOT NULL DEFAULT 0,
-  active     INTEGER NOT NULL DEFAULT 1
+  id               INTEGER PRIMARY KEY,
+  name             TEXT NOT NULL UNIQUE,
+  color            TEXT NOT NULL,
+  meaning          TEXT NOT NULL DEFAULT '', -- tooltip text
+  allows_call_note INTEGER NOT NULL DEFAULT 0, -- behavior flags, not name matching (§4.3):
+  shows_age_counter INTEGER NOT NULL DEFAULT 0, -- renaming an option must never break rules
+  sort_order       INTEGER NOT NULL DEFAULT 0,
+  active           INTEGER NOT NULL DEFAULT 1
 );
 
 CREATE TABLE call_notes (
@@ -46,7 +60,7 @@ CREATE TABLE refills (
   new_profit     REAL,    -- manual only, entered after insurance runs in Pioneer
   refills_filled INTEGER, -- informational, from import
   refill_note_id INTEGER REFERENCES refill_notes (id),
-  call_note_id   INTEGER REFERENCES call_notes (id), -- only meaningful when refill note is Nimble Link / Call Pt
+  call_note_id   INTEGER REFERENCES call_notes (id), -- only meaningful when the refill note's allows_call_note flag is set
   status         TEXT NOT NULL DEFAULT 'Pending'
                  CHECK (status IN ('Pending', 'Checked Out', 'MISSED')),
   notes          TEXT,

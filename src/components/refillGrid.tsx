@@ -19,8 +19,17 @@ import {
 import { deleteRefill, updateRefillField } from "../data/refills";
 import { STATUSES, type EditableField, type Lookup, type Lookups, type RefillRow } from "../data/types";
 import { copayColor, formatMoney, profitStyle, textColorFor } from "../lib/colors";
-import { noteQualifiesForCallNote } from "../lib/rules";
-import { PillSelectEditor, RefillNoteRenderer, RxCopyRenderer, type GridCtx, type PillItem } from "./gridParts";
+import { confirmDestructive } from "../lib/confirmDialog";
+import { insuranceDisplayName, noteQualifiesForCallNote } from "../lib/rules";
+import {
+  InsuranceRenderer,
+  PillSelectEditor,
+  RefillNoteRenderer,
+  RxCopyRenderer,
+  SecondaryRenderer,
+  type GridCtx,
+  type PillItem,
+} from "./gridParts";
 
 ModuleRegistry.registerModules([AllCommunityModule]);
 
@@ -38,6 +47,13 @@ export function toItems(rows: Lookup[], currentId?: number | null): PillItem[] {
     .map((r) => ({ value: r.id, label: r.name, color: r.color, meaning: r.meaning }));
 }
 
+/** Insurance dropdown choices: text-only (logos stay in cell display, §6.1) but with the designation suffix. */
+export function toInsuranceItems(rows: Lookup[], currentId?: number | null): PillItem[] {
+  return rows
+    .filter((r) => r.active === 1 || r.id === currentId)
+    .map((r) => ({ value: r.id, label: insuranceDisplayName(r) }));
+}
+
 // dropdown cells open on a single click (technician feedback, 2026-07-11);
 // text/numeric cells keep double-click so a stray click doesn't start an edit
 export const DROPDOWN_FIELDS = new Set(["insurance_id", "secondary_id", "refill_note_id", "call_note_id", "status"]);
@@ -51,7 +67,7 @@ export interface RefillColOpts {
 export function refillCols(lookups: Lookups, opts: RefillColOpts) {
   const lookupCell = (list: Lookup[]) => (p: CellClassParams<RefillRow>) => {
     const item = list.find((l) => l.id === p.value);
-    return item ? { backgroundColor: item.color, color: textColorFor(item.color) } : undefined;
+    return item?.color ? { backgroundColor: item.color, color: textColorFor(item.color) } : undefined;
   };
   const lookupName = (list: Lookup[]) => (p: ValueFormatterParams<RefillRow>) =>
     list.find((l) => l.id === p.value)?.name ?? "";
@@ -112,13 +128,12 @@ export function refillCols(lookups: Lookups, opts: RefillColOpts) {
     insurance: {
       field: "insurance_id",
       headerName: "Insurance",
-      width: 170,
+      width: 190,
       editable: true,
       cellEditor: PillSelectEditor,
       cellEditorPopup: true,
-      cellEditorParams: { items: toItems(lookups.insurances), allowClear: true },
-      valueFormatter: lookupName(lookups.insurances),
-      cellStyle: lookupCell(lookups.insurances),
+      cellEditorParams: { items: toInsuranceItems(lookups.insurances), allowClear: true },
+      cellRenderer: InsuranceRenderer, // logo-or-plain + designation suffix (story 4.5)
       comparator: (a, b) => {
         const name = (id: number | null) => lookups.insurances.find((i) => i.id === id)?.name ?? "";
         return name(a).localeCompare(name(b));
@@ -132,8 +147,7 @@ export function refillCols(lookups: Lookups, opts: RefillColOpts) {
       cellEditor: PillSelectEditor,
       cellEditorPopup: true,
       cellEditorParams: { items: toItems(lookups.secondaryCoverages), allowClear: true },
-      valueFormatter: lookupName(lookups.secondaryCoverages),
-      cellStyle: lookupCell(lookups.secondaryCoverages),
+      cellRenderer: SecondaryRenderer,
     } as ColDef<RefillRow>,
     refillNote: {
       field: "refill_note_id",
@@ -234,7 +248,11 @@ export function useRefillCellEdit(lookups: Lookups, onMutated: () => void) {
         // call-note gating: never silently wipe a call note (story 1.5)
         if (field === "refill_note_id" && !noteQualifiesForCallNote(e.newValue, lookups) && row.call_note_id != null) {
           const cn = lookups.callNotes.find((c) => c.id === row.call_note_id)?.name ?? "";
-          if (!window.confirm(`This refill note doesn't use call notes — the call note "${cn}" will be cleared. Continue?`)) {
+          const ok = await confirmDestructive(
+            `This refill note doesn't use call notes — the call note "${cn}" will be cleared. Continue?`,
+            { title: "Clear call note", action: "Clear it" },
+          );
+          if (!ok) {
             revertingRef.current = true;
             e.node.setDataValue(field, e.oldValue);
             revertingRef.current = false;
@@ -344,8 +362,9 @@ export function useDueDateSort(apiRef: { current: GridApi<RefillRow> | null }) {
 
 /** Guarded permanent delete (story 2.4): confirm with identifying details, alert on failure. */
 export async function confirmDeleteRefill(row: RefillRow): Promise<boolean> {
-  const ok = window.confirm(
-    `Delete Rx ${row.rx_number} — ${row.drug_name}, due ${dueLabel(row.due_date)}?\nThis permanently removes the row.`,
+  const ok = await confirmDestructive(
+    `Delete Rx ${row.rx_number} — ${row.drug_name}, due ${dueLabel(row.due_date)}?\n\nThis permanently removes the row.`,
+    { title: "Delete refill", action: "Delete" },
   );
   if (!ok) return false;
   try {

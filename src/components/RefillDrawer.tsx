@@ -12,7 +12,8 @@ import {
 } from "../data/refills";
 import { STATUSES, type Drug, type EditableField, type Lookup, type Lookups, type RefillRow, type RefillStatus } from "../data/types";
 import { copayColor, formatMoney, profitStyle, textColorFor } from "../lib/colors";
-import { noteQualifiesForCallNote } from "../lib/rules";
+import { confirmDestructive } from "../lib/confirmDialog";
+import { insuranceDisplayName, noteQualifiesForCallNote } from "../lib/rules";
 
 export type DrawerMode = { kind: "edit"; row: RefillRow } | { kind: "create"; dueDate: string };
 
@@ -56,7 +57,7 @@ const NEAR_DUP_DAYS = 21;
 interface ColorOption {
   key: string;
   label: string;
-  color: string;
+  color?: string; // insurance/secondary options render plain — colors retired by the logo feature (§6.1)
 }
 
 function toOptions(list: Lookup[], currentId: number | null): ColorOption[] {
@@ -64,6 +65,12 @@ function toOptions(list: Lookup[], currentId: number | null): ColorOption[] {
   return list
     .filter((l) => l.active === 1 || l.id === currentId)
     .map((l) => ({ key: String(l.id), label: l.name, color: l.color }));
+}
+
+function toInsuranceOptions(list: Lookup[], currentId: number | null): ColorOption[] {
+  return list
+    .filter((l) => l.active === 1 || l.id === currentId)
+    .map((l) => ({ key: String(l.id), label: insuranceDisplayName(l) }));
 }
 
 function ColorSelect({
@@ -86,11 +93,15 @@ function ColorSelect({
       disabled={disabled}
       value={value ?? ""}
       onChange={(e) => onChange(e.target.value === "" ? null : e.target.value)}
-      style={sel && !disabled ? { backgroundColor: sel.color, color: textColorFor(sel.color) } : undefined}
+      style={sel && !disabled && sel.color ? { backgroundColor: sel.color, color: textColorFor(sel.color) } : undefined}
     >
       {allowClear && <option value="">—</option>}
       {options.map((o) => (
-        <option key={o.key} value={o.key} style={{ backgroundColor: o.color, color: textColorFor(o.color) }}>
+        <option
+          key={o.key}
+          value={o.key}
+          style={o.color ? { backgroundColor: o.color, color: textColorFor(o.color) } : undefined}
+        >
           {o.label}
         </option>
       ))}
@@ -309,7 +320,11 @@ export default function RefillDrawer({ mode, lookups, profitMax, onClose, onRowE
       // call-note gating: never silently wipe a call note (story 1.5)
       if (field === "refill_note_id" && !noteQualifiesForCallNote(value as number | null, lookups) && row.call_note_id != null) {
         const cn = lookups.callNotes.find((c) => c.id === row.call_note_id)?.name ?? "";
-        if (!window.confirm(`This refill note doesn't use call notes — the call note "${cn}" will be cleared. Continue?`)) {
+        const clearOk = await confirmDestructive(
+          `This refill note doesn't use call notes — the call note "${cn}" will be cleared. Continue?`,
+          { title: "Clear call note", action: "Clear it" },
+        );
+        if (!clearOk) {
           bump();
           return false;
         }
@@ -382,9 +397,10 @@ export default function RefillDrawer({ mode, lookups, profitMax, onClose, onRowE
       const otherRows = (await loadRxHistory(row.rx_number)).filter((r) => r.id !== row.id);
       // one Rx # = one medication: a drug correction applies to every row of the Rx
       if (otherRows.length > 0) {
-        const ok = window.confirm(
+        const ok = await confirmDestructive(
           `Rx # ${row.rx_number} has ${otherRows.length} other row(s) as ${row.drug_name}. ` +
             `An Rx number always refers to one medication — change every row of this Rx to ${targetName}?`,
+          { title: "Change medication for the whole Rx", action: "Change all" },
         );
         if (!ok) return false;
       }
@@ -673,7 +689,7 @@ export default function RefillDrawer({ mode, lookups, profitMax, onClose, onRowE
           <label>
             Insurance
             <ColorSelect
-              options={toOptions(lookups.insurances, values.insurance_id)}
+              options={toInsuranceOptions(lookups.insurances, values.insurance_id)}
               value={values.insurance_id == null ? null : String(values.insurance_id)}
               onChange={numField("insurance_id")}
             />

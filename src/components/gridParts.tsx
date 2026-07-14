@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { CustomCellEditorProps, CustomCellRendererProps } from "ag-grid-react";
 import { textColorFor } from "../lib/colors";
+import { insuranceDisplayName, insuranceLogoUrl, secondaryLogoUrl } from "../lib/rules";
 import type { Lookups, RefillRow } from "../data/types";
 
 /** Passed to AG Grid as `context`, readable from every renderer/style callback. */
@@ -10,11 +11,13 @@ export interface GridCtx {
   profitMax: number;
 }
 
-/** One choice in the colored dropdown editor. */
+/** One choice in the dropdown editor. Color is optional — insurance/secondary
+ *  options render plain since the logo feature retired their colors (§6.1);
+ *  dropdowns stay text-only by design. */
 export interface PillItem {
   value: number | string | null;
   label: string;
-  color: string;
+  color?: string;
   meaning?: string;
 }
 
@@ -68,7 +71,7 @@ export function PillSelectEditor(props: CustomCellEditorProps<RefillRow>) {
         <div
           key={String(c.value)}
           className={`pill-option${i === highlight ? " highlight" : ""}${c.value === props.value ? " current" : ""}`}
-          style={{ background: c.color, color: textColorFor(c.color) }}
+          style={c.color ? { background: c.color, color: textColorFor(c.color) } : undefined}
           title={c.meaning || undefined}
           onMouseEnter={() => setHighlight(i)}
           onClick={() => pick(c)}
@@ -153,8 +156,37 @@ export function RowCtxMenu({
 }
 
 // ---------------------------------------------------------------------------
-// Refill Note cell: note name plus, for Nimble Link, a days-since-sent counter
-// (story 1.9) that turns red once it reaches the Settings threshold.
+// Insurance / Secondary cells (story 4.5): plan name with the master-brand
+// logo to its right — logo or nothing, no color fallback (§6.1). Designated
+// plans carry the "(Medicare)"/"(Medicaid)" suffix in the name itself.
+// ---------------------------------------------------------------------------
+
+function LogoName({ name, logo }: { name: string; logo: string | undefined }) {
+  return (
+    <span className="logo-cell">
+      <span className="logo-cell-name">{name}</span>
+      {logo && <img className="logo-cell-img" src={logo} alt="" />}
+    </span>
+  );
+}
+
+export function InsuranceRenderer(props: CustomCellRendererProps<RefillRow>) {
+  const { lookups } = props.context as GridCtx;
+  const plan = lookups.insurances.find((i) => i.id === props.value);
+  if (!plan) return null;
+  return <LogoName name={insuranceDisplayName(plan)} logo={insuranceLogoUrl(plan, lookups)} />;
+}
+
+export function SecondaryRenderer(props: CustomCellRendererProps<RefillRow>) {
+  const { lookups } = props.context as GridCtx;
+  const sec = lookups.secondaryCoverages.find((s) => s.id === props.value);
+  if (!sec) return null;
+  return <LogoName name={sec.name} logo={secondaryLogoUrl(sec)} />;
+}
+
+// ---------------------------------------------------------------------------
+// Refill Note cell: note name plus, for age-counter notes (Nimble Link), a
+// days-since-sent counter (story 1.9) that turns red at the Settings threshold.
 // ---------------------------------------------------------------------------
 
 export function daysSince(iso: string): number {
@@ -166,7 +198,8 @@ export function RefillNoteRenderer(props: CustomCellRendererProps<RefillRow>) {
   const note = ctx.lookups.refillNotes.find((n) => n.id === props.value);
   if (!note) return null;
   const setAt = props.data?.refill_note_set_at;
-  const showCounter = note.name === "Nimble Link" && setAt;
+  // behavior flag, not the name (§4.3): renaming the note must not kill the counter
+  const showCounter = note.shows_age_counter === 1 && setAt;
   const days = showCounter ? daysSince(setAt) : 0;
   const stale = showCounter && days >= ctx.lookups.settings.nimbleLinkAlertDays;
   return (

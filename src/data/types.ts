@@ -7,11 +7,24 @@ export const STATUSES: RefillStatus[] = ["Pending", "Checked Out", "MISSED"];
 export interface Lookup {
   id: number;
   name: string;
-  color: string;
   sort_order: number;
   active: number;
-  is_medicare_medicaid?: number;
-  meaning?: string;
+  color?: string; // refill/call notes only — insurance/secondary colors retired by the logo feature
+  meaning?: string; // notes only
+  allows_call_note?: number; // refill notes: behavior flags, keyed off flags not names
+  shows_age_counter?: number;
+  group_id?: number | null; // insurances: master-brand group; NULL = ungrouped
+  is_medicare?: number; // insurances: designation flags → "(Medicare)"/"(Medicaid)" suffix
+  is_medicaid?: number;
+  logo?: string | null; // secondary coverages: direct per-row bundled-logo key
+}
+
+export interface InsuranceGroup {
+  id: number;
+  name: string;
+  logo: string | null; // bundled asset key; NULL = no logo (plans render plain)
+  sort_order: number;
+  active: number;
 }
 
 export interface CopayTier {
@@ -25,10 +38,12 @@ export interface AppSettings {
   copayTiers: CopayTier[];
   statusColors: Record<string, string>;
   nimbleLinkAlertDays: number;
+  backupFolder: string | null; // persisted on first backup; makes later backups one-click
 }
 
 export interface Lookups {
   insurances: Lookup[];
+  insuranceGroups: InsuranceGroup[];
   secondaryCoverages: Lookup[];
   refillNotes: Lookup[];
   callNotes: Lookup[];
