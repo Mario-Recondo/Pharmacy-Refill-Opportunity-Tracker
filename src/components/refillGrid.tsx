@@ -19,6 +19,7 @@ import {
 import { deleteRefill, updateRefillField } from "../data/refills";
 import { STATUSES, type EditableField, type Lookup, type Lookups, type RefillRow } from "../data/types";
 import { copayColor, formatMoney, profitStyle, textColorFor } from "../lib/colors";
+import { confirmDestructive } from "../lib/confirmDialog";
 import { insuranceDisplayName, noteQualifiesForCallNote } from "../lib/rules";
 import {
   InsuranceRenderer,
@@ -247,7 +248,11 @@ export function useRefillCellEdit(lookups: Lookups, onMutated: () => void) {
         // call-note gating: never silently wipe a call note (story 1.5)
         if (field === "refill_note_id" && !noteQualifiesForCallNote(e.newValue, lookups) && row.call_note_id != null) {
           const cn = lookups.callNotes.find((c) => c.id === row.call_note_id)?.name ?? "";
-          if (!window.confirm(`This refill note doesn't use call notes — the call note "${cn}" will be cleared. Continue?`)) {
+          const ok = await confirmDestructive(
+            `This refill note doesn't use call notes — the call note "${cn}" will be cleared. Continue?`,
+            { title: "Clear call note", action: "Clear it" },
+          );
+          if (!ok) {
             revertingRef.current = true;
             e.node.setDataValue(field, e.oldValue);
             revertingRef.current = false;
@@ -357,8 +362,9 @@ export function useDueDateSort(apiRef: { current: GridApi<RefillRow> | null }) {
 
 /** Guarded permanent delete (story 2.4): confirm with identifying details, alert on failure. */
 export async function confirmDeleteRefill(row: RefillRow): Promise<boolean> {
-  const ok = window.confirm(
-    `Delete Rx ${row.rx_number} — ${row.drug_name}, due ${dueLabel(row.due_date)}?\nThis permanently removes the row.`,
+  const ok = await confirmDestructive(
+    `Delete Rx ${row.rx_number} — ${row.drug_name}, due ${dueLabel(row.due_date)}?\n\nThis permanently removes the row.`,
+    { title: "Delete refill", action: "Delete" },
   );
   if (!ok) return false;
   try {

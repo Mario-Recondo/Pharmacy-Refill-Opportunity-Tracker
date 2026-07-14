@@ -31,6 +31,7 @@ import {
   type LookupTable,
 } from "../data/settingsData";
 import type { CopayTier, InsuranceGroup, Lookup, Lookups } from "../data/types";
+import { confirmDestructive } from "../lib/confirmDialog";
 import { LOGO_ASSETS, logoUrl } from "../lib/logoAssets";
 import { designationSuffix } from "../lib/rules";
 import { textColorFor } from "../lib/colors";
@@ -222,7 +223,11 @@ async function lifecycleItems(
       label: "Delete…",
       danger: true,
       onClick: async () => {
-        if (!window.confirm(`Delete ${what} "${row.name}"? Nothing references it; this cannot be undone.`)) return;
+        const ok = await confirmDestructive(
+          `Delete ${what} "${row.name}"?\n\nNothing references it, and this cannot be undone.`,
+          { title: `Delete ${what}`, action: "Delete" },
+        );
+        if (!ok) return;
         if (!(await deleteLookupIfUnused(table, row.id))) {
           alert("It's now in use — deactivate it instead.");
         }
@@ -327,7 +332,11 @@ function InsuranceSection({ lookups, onChanged }: SettingsProps) {
                       label: "Delete…",
                       danger: true,
                       onClick: async () => {
-                        if (!window.confirm(`Delete empty group "${group.name}"?`)) return;
+                        const ok = await confirmDestructive(`Delete the empty group "${group.name}"?`, {
+                          title: "Delete group",
+                          action: "Delete",
+                        });
+                        if (!ok) return;
                         if (!(await deleteGroupIfEmpty(group.id))) alert("The group has plans now — move them first.");
                         onChanged();
                       },
@@ -638,9 +647,10 @@ function BackupSection({ lookups, onChanged }: SettingsProps) {
         alert("That file doesn't look like a Refill Tracker database — nothing was changed.");
         return;
       }
-      const ok = window.confirm(
+      const ok = await confirmDestructive(
         `Restore from:\n${chosen}\n\nThis replaces ALL current data with the backup's contents. ` +
           `A safety snapshot of today's data is saved to the backup folder first.\n\nThe app restarts after the restore.`,
+        { title: "Restore database", action: "Restore" },
       );
       if (!ok) return;
       await restoreDatabase(chosen, safety); // does not return on success — app relaunches
