@@ -5,10 +5,29 @@ body,
   margin: 0;
 }
 
+/* ---- chrome identity tokens (2026-07-14 visual pass) --------------------
+   One accent system for the app CHROME only. Data colors (copay tiers, note
+   colors, statuses, profit shading) are business coding and never use these.
+   ink   = structure & navigation (tabs, primary actions, active states)
+   green = money only (profits, Opportunities) — defined where used
+   urgent = overdue badge + destructive chrome                              */
+:root {
+  --ink: #1d3557;
+  --ink-hi: #2c4e7e;      /* hover on ink surfaces */
+  --ink-tint: #e9eff6;    /* active/selected backgrounds */
+  --paper: #f4f5f3;       /* app background behind the white work surface */
+  --line: #d9dee4;        /* chrome borders */
+  --line-strong: #c3cbd4; /* control borders */
+  --text: #1c232e;
+  --dim: #5b6572;
+  --urgent: #c1352b;
+  --urgent-tint: #fbeae8;
+}
+
 body {
-  font-family: "Segoe UI", system-ui, sans-serif;
-  color: #222;
-  background: #fafafa;
+  font-family: "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif;
+  color: var(--text);
+  background: var(--paper);
 }
 
 .page {
@@ -22,14 +41,43 @@ body {
   height: 100%;
 }
 
-/* ---- tab bar (M4: first navigation — Month | Overdue, Settings joins in M5) ---- */
+/* ---- header band: the app's face — ink band, Rx wordmark, segmented tabs ---- */
 
 .tabs {
   display: flex;
-  gap: 2px;
-  padding: 6px 12px 0;
-  background: #eef1f4;
-  border-bottom: 1px solid #d8dde4;
+  align-items: center;
+  gap: 4px;
+  height: 42px;
+  padding: 0 14px;
+  background: var(--ink);
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-right: 18px;
+  user-select: none;
+}
+
+.brand-mark {
+  font-family: Georgia, "Times New Roman", serif;
+  font-style: italic;
+  font-weight: 700;
+  font-size: 14px;
+  line-height: 1;
+  padding: 3px 7px 4px;
+  border-radius: 6px;
+  background: #fff;
+  color: var(--ink);
+}
+
+.brand-name {
+  font-size: 13.5px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: #fff;
+  white-space: nowrap;
 }
 
 .tab {
@@ -38,29 +86,27 @@ body {
   gap: 7px;
   font: inherit;
   font-size: 13px;
-  padding: 6px 16px;
-  border: 1px solid transparent;
-  border-bottom: none;
-  border-radius: 8px 8px 0 0;
+  padding: 5px 14px;
+  border: none;
+  border-radius: 6px;
   background: none;
-  color: #5b6572;
+  color: #c6d2e1;
   cursor: pointer;
 }
 
 .tab:hover {
-  color: #1c232e;
+  color: #fff;
+  background: rgba(255, 255, 255, 0.08);
 }
 
 .tab.on {
   background: #fff;
-  color: #1c232e;
+  color: var(--ink);
   font-weight: 600;
-  border-color: #d8dde4;
-  margin-bottom: -1px; /* sit on top of the bar's bottom border */
 }
 
 .tab-badge {
-  background: #d94f4f;
+  background: var(--urgent);
   color: #fff;
   border-radius: 999px;
   font-size: 11px;
@@ -143,7 +189,7 @@ body {
   font: inherit;
   font-size: 13px;
   padding: 4px 10px;
-  border: 1px solid #c5c5c5;
+  border: 1px solid var(--line-strong);
   border-radius: 6px;
   background: #fff;
   cursor: pointer;
@@ -151,7 +197,7 @@ body {
 
 .toolbar button:hover,
 .toolbar select:hover {
-  background: #f0f0f0;
+  background: #f1f4f8;
 }
 
 .toolbar .month-select {
@@ -169,8 +215,8 @@ body {
 }
 
 .toolbar .lock.on {
-  background: #e8eaf6;
-  border-color: #3f51b5;
+  background: var(--ink-tint);
+  border-color: var(--ink);
 }
 
 .toolbar .clear-filters {
@@ -427,7 +473,7 @@ body {
 
 /* day separator between date groups — only rendered in due-date order */
 .ag-row.day-break {
-  border-top: 3px solid #3f51b5 !important;
+  border-top: 3px solid var(--ink) !important;
 }
 
 /* row matching the hovered Opportunities card — inset outline shows over colored cells */
@@ -537,16 +583,29 @@ body {
   font-size: 13px;
   font-weight: 600;
   padding: 4px 12px;
-  border: 1px solid #2e7d32;
+  border: 1px solid var(--ink);
   border-radius: 6px;
-  background: #e8f5e9;
-  color: #1b5e20;
+  background: var(--ink);
+  color: #fff;
   cursor: pointer;
   white-space: nowrap;
 }
 
 .add-refill:hover {
-  background: #d3ecd5;
+  background: var(--ink-hi);
+  border-color: var(--ink-hi);
+}
+
+/* .toolbar button (0-1-1) outranks .add-refill (0-1-0) — restate inside the toolbar */
+.toolbar button.add-refill {
+  background: var(--ink);
+  border-color: var(--ink);
+  color: #fff;
+}
+
+.toolbar button.add-refill:hover {
+  background: var(--ink-hi);
+  border-color: var(--ink-hi);
 }
 
 /* Drug / Due cells open the detail drawer */
@@ -809,15 +868,15 @@ body {
   font-size: 12px;
   font-weight: 600;
   padding: 4px 10px;
-  border: 1px solid #c62828;
+  border: 1px solid var(--urgent);
   border-radius: 6px;
   background: #fff;
-  color: #c62828;
+  color: var(--urgent);
   cursor: pointer;
 }
 
 .dup-actions button:hover {
-  background: #fbe3e1;
+  background: var(--urgent-tint);
 }
 
 /* history (story 2.3) */
@@ -853,8 +912,8 @@ body {
 }
 
 .history-row:hover {
-  border-color: #3f51b5;
-  background: #f2f4fb;
+  border-color: var(--ink);
+  background: var(--ink-tint);
 }
 
 .history-top {
@@ -897,9 +956,9 @@ body {
   position: fixed;
   min-width: 200px;
   background: #fff;
-  border: 1px solid #bbb;
+  border: 1px solid var(--line);
   border-radius: 8px;
-  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.22);
+  box-shadow: 0 6px 18px rgba(28, 35, 46, 0.18);
   z-index: 60;
   overflow: hidden;
 }
@@ -930,15 +989,15 @@ body {
 }
 
 .ctx-menu-item:hover {
-  background: #f0f0f0;
+  background: #eef3f8;
 }
 
 .ctx-menu-item.danger {
-  color: #c62828;
+  color: var(--urgent);
 }
 
 .ctx-menu-item.danger:hover {
-  background: #fdecea;
+  background: var(--urgent-tint);
 }
 
 /* create-mode footer */
@@ -963,8 +1022,8 @@ body {
 }
 
 .drawer-footer button.primary {
-  border-color: #2e7d32;
-  background: #2e7d32;
+  border-color: var(--ink);
+  background: var(--ink);
   color: #fff;
   font-weight: 600;
 }
@@ -981,12 +1040,12 @@ body {
 }
 
 .drawer-footer button.delete {
-  border-color: #ef9a9a;
-  color: #c62828;
+  border-color: #e0a8a2;
+  color: var(--urgent);
 }
 
 .drawer-footer button.delete:hover {
-  background: #fdecea;
+  background: var(--urgent-tint);
 }
 
 /* Insurance / Secondary cells: plan name + master-brand logo (story 4.5).
@@ -1043,9 +1102,9 @@ body {
 }
 .s-nav:hover { background: #f5f5f5; }
 .s-nav.on {
-  border-left-color: #1565c0;
-  background: #eef4fb;
-  color: #0d3c78;
+  border-left-color: var(--ink);
+  background: var(--ink-tint);
+  color: var(--ink);
   font-weight: 600;
 }
 .s-body {
@@ -1055,7 +1114,7 @@ body {
   max-width: 760px;
 }
 .s-hint { color: #777; font-size: 12.5px; margin: 4px 0 12px; }
-.s-error { color: #b71c1c; font-size: 12.5px; font-weight: 600; }
+.s-error { color: var(--urgent); font-size: 12.5px; font-weight: 600; }
 .s-ok { color: #2e7d32; font-size: 12.5px; }
 .s-sub { margin: 18px 0 8px; font-size: 14px; }
 .s-path { font-size: 12.5px; color: #444; word-break: break-all; }
@@ -1098,7 +1157,7 @@ body {
   padding: 1px 3px;
 }
 .s-updown button:disabled { color: #ddd; cursor: default; }
-.s-updown button:not(:disabled):hover { color: #1565c0; }
+.s-updown button:not(:disabled):hover { color: var(--ink); }
 
 .s-kebab { position: relative; margin-left: auto; }
 .s-kebab-btn {
@@ -1117,9 +1176,9 @@ body {
   top: 22px;
   z-index: 40;
   background: #fff;
-  border: 1px solid #d5d5d5;
-  border-radius: 6px;
-  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.14);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  box-shadow: 0 6px 18px rgba(28, 35, 46, 0.18);
   min-width: 190px;
   max-height: 320px;
   overflow-y: auto;
@@ -1138,10 +1197,11 @@ body {
   cursor: pointer;
   border-radius: 4px;
 }
-.s-menu-item:hover { background: #f0f4f8; }
-.s-menu-item.danger { color: #b71c1c; }
+.s-menu-item:hover { background: #eef3f8; }
+.s-menu-item.danger { color: var(--urgent); }
+.s-menu-item.danger:hover { background: var(--urgent-tint); }
 .s-menu-item:disabled { color: #bbb; cursor: default; }
-.s-check { width: 14px; color: #1565c0; font-weight: 700; }
+.s-check { width: 14px; flex: 0 0 auto; color: var(--ink); font-weight: 700; }
 
 .s-logo { height: 16px; max-width: 46px; object-fit: contain; }
 .s-nologo { color: #bbb; font-size: 11.5px; font-style: italic; }
@@ -1186,7 +1246,7 @@ body {
 .s-tier-remove {
   border: none;
   background: none;
-  color: #b71c1c;
+  color: var(--urgent);
   cursor: pointer;
   font-size: 12px;
   padding: 2px 4px;
@@ -1194,23 +1254,37 @@ body {
 .s-add-tier { margin-top: 8px; }
 
 .s-primary {
-  background: #1565c0;
+  background: var(--ink);
   color: #fff;
   border: none;
   padding: 7px 16px;
-  border-radius: 4px;
+  border-radius: 6px;
   cursor: pointer;
   font-size: 13.5px;
+  font-weight: 600;
 }
-.s-primary:disabled { background: #9bb8d8; }
+.s-primary:hover:not(:disabled) { background: var(--ink-hi); }
+.s-primary:disabled { background: #a9bdd6; }
 .s-danger {
   background: #fff;
-  color: #b71c1c;
-  border: 1px solid #d99;
+  color: var(--urgent);
+  border: 1px solid #e0a8a2;
   padding: 7px 16px;
-  border-radius: 4px;
+  border-radius: 6px;
   cursor: pointer;
   font-size: 13.5px;
 }
-.s-danger:hover:not(:disabled) { background: #fdecea; }
+.s-danger:hover:not(:disabled) { background: var(--urgent-tint); }
+
+/* keyboard focus — visible everywhere, on-system */
+button:focus-visible,
+select:focus-visible,
+input:focus-visible,
+textarea:focus-visible {
+  outline: 2px solid var(--ink);
+  outline-offset: 1px;
+}
+.tab:focus-visible {
+  outline-color: #fff;
+}
 

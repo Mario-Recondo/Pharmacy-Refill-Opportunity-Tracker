@@ -62,6 +62,10 @@ function App() {
   return (
     <div className="app">
       <nav className="tabs">
+        <div className="brand">
+          <span className="brand-mark">Rx</span>
+          <span className="brand-name">Refill Tracker</span>
+        </div>
         <button className={tab === "month" ? "tab on" : "tab"} onClick={() => setTab("month")}>
           Month
         </button>

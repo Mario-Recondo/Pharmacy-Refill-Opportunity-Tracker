@@ -154,7 +154,8 @@ function Kebab({ buildItems }: { buildItems: () => Promise<MenuItem[]> }) {
                 }
               }}
             >
-              {it.checked !== undefined && <span className="s-check">{it.checked ? "✓" : ""}</span>}
+              {/* constant gutter keeps labels aligned whether or not a row is checkable */}
+              <span className="s-check">{it.checked ? "✓" : ""}</span>
               {it.label}
               {it.submenu && " …"}
             </button>
