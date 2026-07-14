@@ -6,9 +6,15 @@
   "permissions": [
     "core:default",
     "opener:default",
+    {
+      "identifier": "opener:allow-reveal-item-in-dir",
+      "allow": [{ "path": "$APPCONFIG" }, { "path": "$APPCONFIG/**" }]
+    },
+    "dialog:default",
     "sql:default",
     "sql:allow-load",
     "sql:allow-select",
-    "sql:allow-execute"
+    "sql:allow-execute",
+    "sql:allow-close"
   ]
 }

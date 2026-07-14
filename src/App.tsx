@@ -4,9 +4,10 @@ import { loadOverduePendingCount, todayIso } from "./data/refills";
 import type { Lookups } from "./data/types";
 import MonthView, { type MonthNavRequest } from "./components/MonthView";
 import OverdueView from "./components/OverdueView";
+import SettingsView from "./components/SettingsView";
 import "./App.css";
 
-type Tab = "month" | "overdue";
+type Tab = "month" | "overdue" | "settings";
 
 function App() {
   const [lookups, setLookups] = useState<Lookups | null>(null);
@@ -20,6 +21,12 @@ function App() {
 
   useEffect(() => {
     loadLookups().then(setLookups).catch((e) => setError(String(e)));
+  }, []);
+
+  // Settings edits re-fetch the whole bundle; the fresh prop flows to every
+  // view and reload-on-activation covers grid data (design doc §6.6)
+  const reloadLookups = useCallback(() => {
+    loadLookups().then(setLookups).catch((e) => alert(`Reloading settings failed.\n${e}`));
   }, []);
 
   const refreshOverdueCount = useCallback(() => {
@@ -62,12 +69,18 @@ function App() {
           Overdue
           {overdueCount > 0 && <span className="tab-badge">{overdueCount}</span>}
         </button>
+        <button className={tab === "settings" ? "tab on" : "tab"} onClick={() => setTab("settings")}>
+          Settings
+        </button>
       </nav>
       <div className={tab === "month" ? "tab-page" : "tab-page off"}>
         <MonthView lookups={lookups} active={tab === "month"} navRequest={monthNav} onDataChanged={refreshOverdueCount} />
       </div>
       <div className={tab === "overdue" ? "tab-page" : "tab-page off"}>
         <OverdueView lookups={lookups} active={tab === "overdue"} onOpenInMonth={openInMonth} onDataChanged={refreshOverdueCount} />
+      </div>
+      <div className={tab === "settings" ? "tab-page" : "tab-page off"}>
+        <SettingsView lookups={lookups} onChanged={reloadLookups} />
       </div>
     </div>
   );
