@@ -3,13 +3,16 @@
 // guarded delete. Extracted from MonthView in M4 so the Overdue tab edits
 // through the exact same rules instead of a copy.
 
-import { useCallback, useRef } from "react";
+import { useCallback, useRef, useState } from "react";
 import {
   AllCommunityModule,
   ModuleRegistry,
   type CellClassParams,
   type CellValueChangedEvent,
   type ColDef,
+  type GridApi,
+  type RowClassParams,
+  type SortChangedEvent,
   type ValueFormatterParams,
   type ValueParserParams,
 } from "ag-grid-community";
@@ -252,6 +255,91 @@ export function useRefillCellEdit(lookups: Lookups, onMutated: () => void) {
     },
     [lookups, onMutated],
   );
+}
+
+/**
+ * Due-date-first sorting, shared by both grids: tracks whether the grid is in
+ * due-date order (day separators draw only then — story 1.1), enforces the
+ * date-order lock (story 1.8: due date stays the primary key, other columns
+ * sort within each day) and provides Reset sort. An unsorted grid displays
+ * query order, which is due-date order.
+ */
+export function useDueDateSort(apiRef: { current: GridApi<RefillRow> | null }) {
+  const [locked, setLocked] = useState(false);
+  const lockedRef = useRef(false);
+  const lockedDirRef = useRef<"asc" | "desc">("asc");
+  const applyingSortRef = useRef(false);
+  const dateOrderRef = useRef(true);
+
+  const recomputeDateOrder = useCallback((api: GridApi<RefillRow>) => {
+    const sorted = api
+      .getColumnState()
+      .filter((s) => s.sort)
+      .sort((a, b) => (a.sortIndex ?? 0) - (b.sortIndex ?? 0));
+    dateOrderRef.current = sorted.length === 0 || sorted[0].colId === "due_date";
+  }, []);
+
+  const enforceLock = useCallback((api: GridApi<RefillRow>) => {
+    const sorted = api
+      .getColumnState()
+      .filter((s) => s.sort)
+      .sort((a, b) => (a.sortIndex ?? 0) - (b.sortIndex ?? 0));
+    const due = sorted.find((s) => s.colId === "due_date");
+    if (due?.sort === "asc" || due?.sort === "desc") lockedDirRef.current = due.sort;
+    const secondary = sorted.find((s) => s.colId !== "due_date");
+    applyingSortRef.current = true;
+    api.applyColumnState({
+      state: [
+        { colId: "due_date", sort: lockedDirRef.current, sortIndex: 0 },
+        ...(secondary ? [{ colId: secondary.colId, sort: secondary.sort, sortIndex: 1 }] : []),
+      ],
+      defaultState: { sort: null },
+    });
+    applyingSortRef.current = false;
+  }, []);
+
+  const onSortChanged = useCallback(
+    (e: SortChangedEvent<RefillRow>) => {
+      if (applyingSortRef.current) return;
+      if (lockedRef.current) enforceLock(e.api);
+      recomputeDateOrder(e.api);
+      e.api.redrawRows(); // spike learning: row classes only compute on draw
+    },
+    [enforceLock, recomputeDateOrder],
+  );
+
+  const toggleLock = useCallback(() => {
+    const next = !lockedRef.current;
+    setLocked(next);
+    lockedRef.current = next;
+    const api = apiRef.current;
+    if (!api) return;
+    if (next) enforceLock(api);
+    recomputeDateOrder(api);
+    api.redrawRows();
+  }, [apiRef, enforceLock, recomputeDateOrder]);
+
+  const resetSort = useCallback(() => {
+    setLocked(false);
+    lockedRef.current = false;
+    lockedDirRef.current = "asc";
+    const api = apiRef.current;
+    if (!api) return;
+    applyingSortRef.current = true;
+    api.applyColumnState({ state: [{ colId: "due_date", sort: "asc", sortIndex: 0 }], defaultState: { sort: null } });
+    applyingSortRef.current = false;
+    recomputeDateOrder(api);
+    api.redrawRows();
+  }, [apiRef, recomputeDateOrder]);
+
+  /** true when a day-separator line belongs above this row (previous displayed row is a different due date) */
+  const isDayBreak = useCallback((params: RowClassParams<RefillRow>): boolean => {
+    if (!dateOrderRef.current || params.node.rowIndex == null || params.node.rowIndex === 0) return false;
+    const prev = params.api.getDisplayedRowAtIndex(params.node.rowIndex - 1);
+    return !!(prev?.data && params.data && prev.data.due_date !== params.data.due_date);
+  }, []);
+
+  return { locked, toggleLock, resetSort, onSortChanged, isDayBreak };
 }
 
 /** Guarded permanent delete (story 2.4): confirm with identifying details, alert on failure. */

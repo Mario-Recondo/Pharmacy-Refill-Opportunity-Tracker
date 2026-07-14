@@ -8,11 +8,10 @@ import {
   type GridApi,
   type GridReadyEvent,
   type RowClassParams,
-  type SortChangedEvent,
 } from "ag-grid-community";
 import { loadMonth, loadMonthCounts } from "../data/refills";
 import { STATUSES, type Lookups, type RefillRow, type RefillStatus } from "../data/types";
-import { confirmDeleteRefill, DROPDOWN_FIELDS, dueLabel, refillCols, useRefillCellEdit } from "./refillGrid";
+import { confirmDeleteRefill, DROPDOWN_FIELDS, dueLabel, refillCols, useDueDateSort, useRefillCellEdit } from "./refillGrid";
 import { RowCtxMenu, type CtxMenuState, type GridCtx } from "./gridParts";
 import OpportunitiesPanel from "./OpportunitiesPanel";
 import RefillDrawer from "./RefillDrawer";
@@ -66,17 +65,13 @@ export default function MonthView({ lookups, active, navRequest, onDataChanged }
   const [monthCounts, setMonthCounts] = useState<Map<string, number>>(new Map());
   const [filters, setFilters] = useState<Filters>(NO_FILTERS);
   const [showSecondary, setShowSecondary] = useState(false);
-  const [locked, setLocked] = useState(false);
   const [drawer, setDrawer] = useState<{ kind: "edit"; id: number } | { kind: "create"; dueDate: string } | null>(null);
   const [ctxMenu, setCtxMenu] = useState<CtxMenuState | null>(null);
   // row to focus (and maybe open) once its month's rows are loaded — history jumps, due-date moves, fresh creates
   const pendingFocusRef = useRef<{ id: number; open: boolean } | null>(null);
 
   const apiRef = useRef<GridApi<RefillRow> | null>(null);
-  const lockedRef = useRef(false);
-  const lockedDirRef = useRef<"asc" | "desc">("asc");
-  const applyingSortRef = useRef(false);
-  const dateOrderRef = useRef(true);
+  const { locked, toggleLock, resetSort, onSortChanged, isDayBreak } = useDueDateSort(apiRef);
 
   useEffect(() => {
     loadMonth(ym).then(setRows).catch((e) => alert(`Failed to load ${ym}: ${e}`));
@@ -253,83 +248,20 @@ export default function MonthView({ lookups, active, navRequest, onDataChanged }
     setCtxMenu({ x: ev.clientX, y: ev.clientY, row: e.data });
   }, []);
 
-  // ----- sorting: day separators + due-date lock ---------------------------
-
-  const recomputeDateOrder = useCallback((api: GridApi<RefillRow>) => {
-    const sorted = api
-      .getColumnState()
-      .filter((s) => s.sort)
-      .sort((a, b) => (a.sortIndex ?? 0) - (b.sortIndex ?? 0));
-    // unsorted grid displays query order, which is due-date order
-    dateOrderRef.current = sorted.length === 0 || sorted[0].colId === "due_date";
-  }, []);
-
-  const enforceLock = useCallback((api: GridApi<RefillRow>) => {
-    const sorted = api
-      .getColumnState()
-      .filter((s) => s.sort)
-      .sort((a, b) => (a.sortIndex ?? 0) - (b.sortIndex ?? 0));
-    const due = sorted.find((s) => s.colId === "due_date");
-    if (due?.sort === "asc" || due?.sort === "desc") lockedDirRef.current = due.sort;
-    const secondary = sorted.find((s) => s.colId !== "due_date");
-    applyingSortRef.current = true;
-    api.applyColumnState({
-      state: [
-        { colId: "due_date", sort: lockedDirRef.current, sortIndex: 0 },
-        ...(secondary ? [{ colId: secondary.colId, sort: secondary.sort, sortIndex: 1 }] : []),
-      ],
-      defaultState: { sort: null },
-    });
-    applyingSortRef.current = false;
-  }, []);
-
-  const onSortChanged = useCallback(
-    (e: SortChangedEvent<RefillRow>) => {
-      if (applyingSortRef.current) return;
-      if (lockedRef.current) enforceLock(e.api);
-      recomputeDateOrder(e.api);
-      e.api.redrawRows(); // spike learning: row classes only compute on draw
-    },
-    [enforceLock, recomputeDateOrder],
-  );
-
-  const toggleLock = () => {
-    const next = !locked;
-    setLocked(next);
-    lockedRef.current = next;
-    const api = apiRef.current;
-    if (!api) return;
-    if (next) enforceLock(api);
-    recomputeDateOrder(api);
-    api.redrawRows();
-  };
-
-  const resetSort = () => {
-    setLocked(false);
-    lockedRef.current = false;
-    lockedDirRef.current = "asc";
-    const api = apiRef.current;
-    if (!api) return;
-    applyingSortRef.current = true;
-    api.applyColumnState({ state: [{ colId: "due_date", sort: "asc", sortIndex: 0 }], defaultState: { sort: null } });
-    applyingSortRef.current = false;
-    recomputeDateOrder(api);
-    api.redrawRows();
-  };
+  // ----- row classes: day separators (shared hook) + opportunity hover -------
 
   // hovering an Opportunities card highlights its grid row (checked at draw time)
   const oppHoverIdRef = useRef<number | null>(null);
 
-  const getRowClass = useCallback((params: RowClassParams<RefillRow>): string[] | undefined => {
-    const classes: string[] = [];
-    // day separators only while the grid is in due-date order (story 1.1)
-    if (dateOrderRef.current && params.node.rowIndex != null && params.node.rowIndex > 0) {
-      const prev = params.api.getDisplayedRowAtIndex(params.node.rowIndex - 1);
-      if (prev?.data && params.data && prev.data.due_date !== params.data.due_date) classes.push("day-break");
-    }
-    if (params.data && params.data.id === oppHoverIdRef.current) classes.push("opp-hover");
-    return classes.length ? classes : undefined;
-  }, []);
+  const getRowClass = useCallback(
+    (params: RowClassParams<RefillRow>): string[] | undefined => {
+      const classes: string[] = [];
+      if (isDayBreak(params)) classes.push("day-break");
+      if (params.data && params.data.id === oppHoverIdRef.current) classes.push("opp-hover");
+      return classes.length ? classes : undefined;
+    },
+    [isDayBreak],
+  );
 
   const setOppHover = useCallback((id: number | null) => {
     const prev = oppHoverIdRef.current;

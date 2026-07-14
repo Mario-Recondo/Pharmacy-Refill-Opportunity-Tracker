@@ -1,7 +1,9 @@
 // Overdue tab (story 1.7, flow 8): every Pending row past its due date plus
 // every MISSED row, across all months, oldest first. Pending rows leave when
 // resolved; MISSED rows stay forever — the tab doubles as the permanent record
-// of slipped refills. A filter over the refills table; no schema impact.
+// of slipped refills. Full month-grid column set (user decision 2026-07-13)
+// plus a Days-over column and a pinned-right action placeholder; a filter over
+// the refills table, no schema impact.
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AgGridReact } from "ag-grid-react";
@@ -12,11 +14,12 @@ import {
   type ColDef,
   type GridApi,
   type GridReadyEvent,
+  type RowClassParams,
 } from "ag-grid-community";
 import type { CustomCellRendererProps } from "ag-grid-react";
 import { loadOverdue, todayIso } from "../data/refills";
-import type { Lookups, RefillRow } from "../data/types";
-import { confirmDeleteRefill, DROPDOWN_FIELDS, dueLabel, refillCols, useRefillCellEdit } from "./refillGrid";
+import { STATUSES, type Lookups, type RefillRow, type RefillStatus } from "../data/types";
+import { confirmDeleteRefill, DROPDOWN_FIELDS, dueLabel, refillCols, useDueDateSort, useRefillCellEdit } from "./refillGrid";
 import { RowCtxMenu, type CtxMenuState, type GridCtx } from "./gridParts";
 import RefillDrawer from "./RefillDrawer";
 
@@ -25,13 +28,6 @@ function daysOverdue(iso: string): number {
   const now = new Date();
   const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
   return Math.max(0, Math.round((today.getTime() - new Date(y, m - 1, d).getTime()) / 86_400_000));
-}
-
-/** "Wed 6/24 · 19d" — original due date plus age at a glance (sketch screen 3); year shown once it differs */
-function wasDueText(iso: string): string {
-  const [y, m, d] = iso.split("-").map(Number);
-  const label = y === new Date().getFullYear() ? dueLabel(iso) : `${m}/${d}/${String(y).slice(2)}`;
-  return `${label} · ${daysOverdue(iso)}d`;
 }
 
 // greyed v3 placeholder (the Call List ships in v3 — layout accounts for it now);
@@ -46,6 +42,14 @@ function OverdueActionRenderer(props: CustomCellRendererProps<RefillRow>) {
   );
 }
 
+interface Filters {
+  insuranceId: number | null;
+  status: RefillStatus | null;
+  unresolvedOnly: boolean;
+}
+
+const NO_FILTERS: Filters = { insuranceId: null, status: null, unresolvedOnly: false };
+
 interface OverdueViewProps {
   lookups: Lookups;
   /** reload on every activation — cross-tab edits and day rollover both change what belongs here */
@@ -59,9 +63,12 @@ interface OverdueViewProps {
 export default function OverdueView({ lookups, active, onOpenInMonth, onDataChanged }: OverdueViewProps) {
   const [rows, setRows] = useState<RefillRow[]>([]);
   const [loaded, setLoaded] = useState(false);
+  const [filters, setFilters] = useState<Filters>(NO_FILTERS);
+  const [showSecondary, setShowSecondary] = useState(false);
   const [drawerId, setDrawerId] = useState<number | null>(null);
   const [ctxMenu, setCtxMenu] = useState<CtxMenuState | null>(null);
   const apiRef = useRef<GridApi<RefillRow> | null>(null);
+  const { locked, toggleLock, resetSort, onSortChanged, isDayBreak } = useDueDateSort(apiRef);
 
   const load = useCallback(() => {
     loadOverdue(todayIso())
@@ -76,23 +83,37 @@ export default function OverdueView({ lookups, active, onOpenInMonth, onDataChan
     if (active) load();
   }, [active, load]);
 
-  // Relative profit shading (story 3.2), same rule as the month grid
+  const filteredRows = useMemo(
+    () =>
+      rows.filter(
+        (r) =>
+          (filters.insuranceId === null || r.insurance_id === filters.insuranceId) &&
+          (filters.status === null || r.status === filters.status) &&
+          (!filters.unresolvedOnly || r.status === "Pending"),
+      ),
+    [rows, filters],
+  );
+
+  // Relative profit shading (story 3.2), same rule as the month grid: max among visible rows
   const profitMax = useMemo(() => {
     let max = 0;
-    for (const r of rows) {
+    for (const r of filteredRows) {
       if (r.old_profit != null && r.old_profit > max) max = r.old_profit;
       if (r.new_profit != null && r.new_profit > max) max = r.new_profit;
     }
     return max;
-  }, [rows]);
+  }, [filteredRows]);
 
   const ctxRef = useRef<GridCtx>({ lookups, profitMax: 0 });
   ctxRef.current.lookups = lookups;
   ctxRef.current.profitMax = profitMax;
 
   useEffect(() => {
+    // shading is relative to the visible set; day separators depend on neighbors —
+    // both are computed at draw time, so redraw when the visible set changes
     apiRef.current?.refreshCells({ force: true });
-  }, [rows, profitMax]);
+    apiRef.current?.redrawRows();
+  }, [filteredRows, profitMax]);
 
   // any persisted change: refresh the badge and requery — resolved rows leave the tab here
   const onMutated = useCallback(() => {
@@ -119,20 +140,30 @@ export default function OverdueView({ lookups, active, onOpenInMonth, onDataChan
     return [
       c.rx,
       c.drug,
+      c.due,
       {
-        field: "due_date",
-        headerName: "Was due",
-        width: 150,
-        cellClass: "open-drawer overdue-date",
-        valueFormatter: (p) => (p.value ? wasDueText(p.value) : ""),
+        colId: "days_over",
+        headerName: "Days over",
+        width: 95,
+        valueGetter: (p) => (p.data ? daysOverdue(p.data.due_date) : null),
+        valueFormatter: (p) => (p.value == null ? "" : `${p.value}d`),
+        type: "rightAligned",
       },
       c.insurance,
+      { ...c.secondary, hide: !showSecondary },
       c.refillNote,
+      c.callNote,
+      c.oldCopay,
+      c.newCopay,
       c.oldProfit,
+      c.newProfit,
+      c.refillsFilled,
       c.status,
-      { colId: "action", headerName: "", width: 140, sortable: false, cellRenderer: OverdueActionRenderer },
+      c.notes,
+      // pinned so the v3 placeholder / MISSED hint stay in view (user decision 2026-07-13)
+      { colId: "action", headerName: "", width: 140, pinned: "right", sortable: false, cellRenderer: OverdueActionRenderer },
     ];
-  }, [lookups]);
+  }, [lookups, showSecondary]);
 
   const onGridReady = useCallback((e: GridReadyEvent<RefillRow>) => {
     apiRef.current = e.api;
@@ -154,8 +185,14 @@ export default function OverdueView({ lookups, active, onOpenInMonth, onDataChan
     setCtxMenu({ x: ev.clientX, y: ev.clientY, row: e.data });
   }, []);
 
+  const getRowClass = useCallback(
+    (params: RowClassParams<RefillRow>): string[] | undefined => (isDayBreak(params) ? ["day-break"] : undefined),
+    [isDayBreak],
+  );
+
   // rows arrive oldest-first, so the first Pending row is the oldest unresolved
   const pending = useMemo(() => rows.filter((r) => r.status === "Pending"), [rows]);
+  const filtersActive = filters.insuranceId !== null || filters.status !== null || filters.unresolvedOnly;
 
   return (
     <div className="overdue-view">
@@ -165,6 +202,58 @@ export default function OverdueView({ lookups, active, onOpenInMonth, onDataChan
           {dueLabel(pending[0].due_date)}) — work them or mark MISSED
         </div>
       )}
+
+      <div className="toolbar">
+        <div className="toolbar-group filters">
+          <select
+            value={filters.insuranceId ?? ""}
+            onChange={(e) => setFilters({ ...filters, insuranceId: e.target.value ? Number(e.target.value) : null })}
+          >
+            <option value="">All insurances</option>
+            {lookups.insurances.filter((i) => i.active === 1).map((i) => (
+              <option key={i.id} value={i.id}>{i.name}</option>
+            ))}
+          </select>
+          <select
+            value={filters.status ?? ""}
+            onChange={(e) => setFilters({ ...filters, status: (e.target.value || null) as RefillStatus | null })}
+          >
+            <option value="">All statuses</option>
+            {STATUSES.filter((s) => s !== "Checked Out").map((s) => (
+              <option key={s} value={s}>{s}</option>
+            ))}
+          </select>
+          <label className="check">
+            <input
+              type="checkbox"
+              checked={filters.unresolvedOnly}
+              onChange={(e) => setFilters({ ...filters, unresolvedOnly: e.target.checked })}
+            />
+            Unresolved only
+          </label>
+          {filtersActive && (
+            <button className="clear-filters" onClick={() => setFilters(NO_FILTERS)}>
+              Clear filters
+            </button>
+          )}
+        </div>
+
+        <div className="toolbar-group">
+          <span className="row-count">
+            {filteredRows.length === rows.length ? `${rows.length} rows` : `${filteredRows.length} of ${rows.length} rows`}
+            {" · "}
+            {pending.length} past due · {rows.length - pending.length} MISSED
+          </span>
+          <label className="check">
+            <input type="checkbox" checked={showSecondary} onChange={(e) => setShowSecondary(e.target.checked)} />
+            Secondary
+          </label>
+          <button className={locked ? "lock on" : "lock"} onClick={toggleLock} title="Keep due-date order while sorting other columns within each day">
+            {locked ? "🔒 Date order locked" : "🔓 Lock date order"}
+          </button>
+          <button onClick={resetSort}>Reset sort</button>
+        </div>
+      </div>
 
       {loaded && rows.length === 0 ? (
         <div className="empty-month">
@@ -178,20 +267,23 @@ export default function OverdueView({ lookups, active, onOpenInMonth, onDataChan
         <div className="grid-wrap">
           <AgGridReact<RefillRow>
             theme={themeQuartz}
-            rowData={rows}
+            rowData={filteredRows}
             columnDefs={columnDefs}
             context={ctxRef.current}
             getRowId={(p) => String(p.data.id)}
             defaultColDef={{ sortable: true, resizable: true }}
             onGridReady={onGridReady}
+            onSortChanged={onSortChanged}
             onCellClicked={onCellClicked}
             onCellContextMenu={onCellContextMenu}
             preventDefaultOnContextMenu={true}
             onCellValueChanged={onCellValueChanged}
+            getRowClass={getRowClass}
             stopEditingWhenCellsLoseFocus={true}
             enterNavigatesVertically={true}
             enterNavigatesVerticallyAfterEdit={true}
             tooltipShowDelay={400}
+            overlayNoRowsTemplate="No rows match the active filters"
           />
         </div>
       )}

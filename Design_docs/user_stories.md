@@ -64,6 +64,7 @@ As a technician, I want an Overdue tab showing all overdue and MISSED refills ac
 Acceptance criteria:
 - The tab lists every row whose due date has passed while status is `Pending`, plus all `MISSED` rows, regardless of which month they belong to.
 - Rows open, edit, and resolve exactly like grid rows; resolving a row removes it from the tab.
+- The tab shows the full month-grid column set with identical editors, gating and colors (Secondary behind the same toggle; no Nimble Link counter, story 1.9), plus a sortable "Days over" column and a pinned-right action column. Quick filters cover insurance, status, and unresolved-only; day separators and the date-order lock work as in the month grid.
 - `MISSED` rows stay listed indefinitely (no auto-hide) — the tab is also the permanent record of slipped refills.
 - The month/day grid views are unaffected — overdue rows from other months never bleed into them.
 - The Overdue tab's count badge (and the banner above the list) counts Pending past-due rows only — MISSED rows are the permanent record, not a to-do, and would grow the count forever.
