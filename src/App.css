@@ -22,6 +22,100 @@ body {
   height: 100%;
 }
 
+/* ---- tab bar (M4: first navigation — Month | Overdue, Settings joins in M5) ---- */
+
+.tabs {
+  display: flex;
+  gap: 2px;
+  padding: 6px 12px 0;
+  background: #eef1f4;
+  border-bottom: 1px solid #d8dde4;
+}
+
+.tab {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font: inherit;
+  font-size: 13px;
+  padding: 6px 16px;
+  border: 1px solid transparent;
+  border-bottom: none;
+  border-radius: 8px 8px 0 0;
+  background: none;
+  color: #5b6572;
+  cursor: pointer;
+}
+
+.tab:hover {
+  color: #1c232e;
+}
+
+.tab.on {
+  background: #fff;
+  color: #1c232e;
+  font-weight: 600;
+  border-color: #d8dde4;
+  margin-bottom: -1px; /* sit on top of the bar's bottom border */
+}
+
+.tab-badge {
+  background: #d94f4f;
+  color: #fff;
+  border-radius: 999px;
+  font-size: 11px;
+  line-height: 1;
+  padding: 2px 6px;
+  font-weight: 700;
+}
+
+.tab-page {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.tab-page.off {
+  display: none;
+}
+
+/* ---- overdue tab (story 1.7) ---- */
+
+.overdue-view {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.overdue-banner {
+  padding: 8px 14px;
+  font-size: 13px;
+  font-weight: 600;
+  background: #fff6e5;
+  color: #8a5a00;
+  border-bottom: 1px solid #eadcb8;
+}
+
+.call-list-ghost {
+  font: inherit;
+  font-size: 11px;
+  padding: 2px 8px;
+  border: 1px dashed #c5c5c5;
+  border-radius: 6px;
+  background: #fafafa;
+  color: #98a2b1;
+  cursor: not-allowed;
+  white-space: nowrap;
+}
+
+.overdue-hint {
+  font-size: 11px;
+  color: #98a2b1;
+  font-style: italic;
+}
+
 /* ---- toolbar ---- */
 
 .toolbar {

@@ -1,15 +1,40 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { loadLookups } from "./data/lookups";
+import { loadOverduePendingCount, todayIso } from "./data/refills";
 import type { Lookups } from "./data/types";
-import MonthView from "./components/MonthView";
+import MonthView, { type MonthNavRequest } from "./components/MonthView";
+import OverdueView from "./components/OverdueView";
 import "./App.css";
+
+type Tab = "month" | "overdue";
 
 function App() {
   const [lookups, setLookups] = useState<Lookups | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [tab, setTab] = useState<Tab>("month");
+  // badge = actionable count (Pending past due); MISSED rows are the permanent
+  // record and would grow the badge forever — see OverdueView
+  const [overdueCount, setOverdueCount] = useState(0);
+  const [monthNav, setMonthNav] = useState<MonthNavRequest | null>(null);
+  const navSeq = useRef(0);
 
   useEffect(() => {
     loadLookups().then(setLookups).catch((e) => setError(String(e)));
+  }, []);
+
+  const refreshOverdueCount = useCallback(() => {
+    loadOverduePendingCount(todayIso()).then(setOverdueCount).catch(console.error);
+  }, []);
+
+  useEffect(() => {
+    if (lookups) refreshOverdueCount();
+  }, [lookups, refreshOverdueCount]);
+
+  /** the Overdue tab wants a refill opened in the month grid (drawer history click) */
+  const openInMonth = useCallback((id: number, dueDate: string) => {
+    navSeq.current += 1;
+    setMonthNav({ id, dueDate, seq: navSeq.current });
+    setTab("month");
   }, []);
 
   if (error) {
@@ -25,9 +50,25 @@ function App() {
     return <main className="page">Loading…</main>;
   }
 
+  // both views stay mounted so tab switches keep month/filter/sort state;
+  // the inactive one is display:none and reloads its data on re-activation
   return (
     <div className="app">
-      <MonthView lookups={lookups} />
+      <nav className="tabs">
+        <button className={tab === "month" ? "tab on" : "tab"} onClick={() => setTab("month")}>
+          Month
+        </button>
+        <button className={tab === "overdue" ? "tab on" : "tab"} onClick={() => setTab("overdue")}>
+          Overdue
+          {overdueCount > 0 && <span className="tab-badge">{overdueCount}</span>}
+        </button>
+      </nav>
+      <div className={tab === "month" ? "tab-page" : "tab-page off"}>
+        <MonthView lookups={lookups} active={tab === "month"} navRequest={monthNav} onDataChanged={refreshOverdueCount} />
+      </div>
+      <div className={tab === "overdue" ? "tab-page" : "tab-page off"}>
+        <OverdueView lookups={lookups} active={tab === "overdue"} onOpenInMonth={openInMonth} onDataChanged={refreshOverdueCount} />
+      </div>
     </div>
   );
 }
