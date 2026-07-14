@@ -22,6 +22,7 @@ import { STATUSES, type Lookups, type RefillRow, type RefillStatus } from "../da
 import { confirmDeleteRefill, DROPDOWN_FIELDS, dueLabel, refillCols, useDueDateSort, useRefillCellEdit } from "./refillGrid";
 import { RowCtxMenu, type CtxMenuState, type GridCtx } from "./gridParts";
 import RefillDrawer from "./RefillDrawer";
+import { insuranceDisplayName } from "../lib/rules";
 
 function daysOverdue(iso: string): number {
   const [y, m, d] = iso.split("-").map(Number);
@@ -211,7 +212,7 @@ export default function OverdueView({ lookups, active, onOpenInMonth, onDataChan
           >
             <option value="">All insurances</option>
             {lookups.insurances.filter((i) => i.active === 1).map((i) => (
-              <option key={i.id} value={i.id}>{i.name}</option>
+              <option key={i.id} value={i.id}>{insuranceDisplayName(i)}</option>
             ))}
           </select>
           <select

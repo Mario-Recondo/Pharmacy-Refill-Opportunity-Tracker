@@ -988,3 +988,25 @@ body {
 .drawer-footer button.delete:hover {
   background: #fdecea;
 }
+
+/* Insurance / Secondary cells: plan name + master-brand logo (story 4.5).
+   Logo or nothing — no color fill. */
+.logo-cell {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  overflow: hidden;
+}
+.logo-cell-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.logo-cell-img {
+  height: 16px;
+  max-width: 42px;
+  object-fit: contain;
+  flex: 0 0 auto;
+  margin-left: auto;
+}

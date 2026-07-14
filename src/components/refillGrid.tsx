@@ -19,8 +19,16 @@ import {
 import { deleteRefill, updateRefillField } from "../data/refills";
 import { STATUSES, type EditableField, type Lookup, type Lookups, type RefillRow } from "../data/types";
 import { copayColor, formatMoney, profitStyle, textColorFor } from "../lib/colors";
-import { noteQualifiesForCallNote } from "../lib/rules";
-import { PillSelectEditor, RefillNoteRenderer, RxCopyRenderer, type GridCtx, type PillItem } from "./gridParts";
+import { insuranceDisplayName, noteQualifiesForCallNote } from "../lib/rules";
+import {
+  InsuranceRenderer,
+  PillSelectEditor,
+  RefillNoteRenderer,
+  RxCopyRenderer,
+  SecondaryRenderer,
+  type GridCtx,
+  type PillItem,
+} from "./gridParts";
 
 ModuleRegistry.registerModules([AllCommunityModule]);
 
@@ -38,6 +46,13 @@ export function toItems(rows: Lookup[], currentId?: number | null): PillItem[] {
     .map((r) => ({ value: r.id, label: r.name, color: r.color, meaning: r.meaning }));
 }
 
+/** Insurance dropdown choices: text-only (logos stay in cell display, §6.1) but with the designation suffix. */
+export function toInsuranceItems(rows: Lookup[], currentId?: number | null): PillItem[] {
+  return rows
+    .filter((r) => r.active === 1 || r.id === currentId)
+    .map((r) => ({ value: r.id, label: insuranceDisplayName(r) }));
+}
+
 // dropdown cells open on a single click (technician feedback, 2026-07-11);
 // text/numeric cells keep double-click so a stray click doesn't start an edit
 export const DROPDOWN_FIELDS = new Set(["insurance_id", "secondary_id", "refill_note_id", "call_note_id", "status"]);
@@ -51,7 +66,7 @@ export interface RefillColOpts {
 export function refillCols(lookups: Lookups, opts: RefillColOpts) {
   const lookupCell = (list: Lookup[]) => (p: CellClassParams<RefillRow>) => {
     const item = list.find((l) => l.id === p.value);
-    return item ? { backgroundColor: item.color, color: textColorFor(item.color) } : undefined;
+    return item?.color ? { backgroundColor: item.color, color: textColorFor(item.color) } : undefined;
   };
   const lookupName = (list: Lookup[]) => (p: ValueFormatterParams<RefillRow>) =>
     list.find((l) => l.id === p.value)?.name ?? "";
@@ -112,13 +127,12 @@ export function refillCols(lookups: Lookups, opts: RefillColOpts) {
     insurance: {
       field: "insurance_id",
       headerName: "Insurance",
-      width: 170,
+      width: 190,
       editable: true,
       cellEditor: PillSelectEditor,
       cellEditorPopup: true,
-      cellEditorParams: { items: toItems(lookups.insurances), allowClear: true },
-      valueFormatter: lookupName(lookups.insurances),
-      cellStyle: lookupCell(lookups.insurances),
+      cellEditorParams: { items: toInsuranceItems(lookups.insurances), allowClear: true },
+      cellRenderer: InsuranceRenderer, // logo-or-plain + designation suffix (story 4.5)
       comparator: (a, b) => {
         const name = (id: number | null) => lookups.insurances.find((i) => i.id === id)?.name ?? "";
         return name(a).localeCompare(name(b));
@@ -132,8 +146,7 @@ export function refillCols(lookups: Lookups, opts: RefillColOpts) {
       cellEditor: PillSelectEditor,
       cellEditorPopup: true,
       cellEditorParams: { items: toItems(lookups.secondaryCoverages), allowClear: true },
-      valueFormatter: lookupName(lookups.secondaryCoverages),
-      cellStyle: lookupCell(lookups.secondaryCoverages),
+      cellRenderer: SecondaryRenderer,
     } as ColDef<RefillRow>,
     refillNote: {
       field: "refill_note_id",

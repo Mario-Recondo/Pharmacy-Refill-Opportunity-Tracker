@@ -15,6 +15,7 @@ import { confirmDeleteRefill, DROPDOWN_FIELDS, dueLabel, refillCols, useDueDateS
 import { RowCtxMenu, type CtxMenuState, type GridCtx } from "./gridParts";
 import OpportunitiesPanel from "./OpportunitiesPanel";
 import RefillDrawer from "./RefillDrawer";
+import { insuranceDisplayName } from "../lib/rules";
 
 const MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
 
@@ -366,7 +367,7 @@ export default function MonthView({ lookups, active, navRequest, onDataChanged }
           >
             <option value="">All insurances</option>
             {lookups.insurances.filter((i) => i.active === 1).map((i) => (
-              <option key={i.id} value={i.id}>{i.name}</option>
+              <option key={i.id} value={i.id}>{insuranceDisplayName(i)}</option>
             ))}
           </select>
           <select

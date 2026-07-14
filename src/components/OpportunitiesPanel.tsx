@@ -88,7 +88,7 @@ function OppCard({
         <span className="opp-due">
           {shortDate(row.due_date)} · {dueWord(row.due_date, today)}
         </span>
-        {note && (
+        {note?.color && (
           <span className="opp-note" style={{ backgroundColor: note.color, color: textColorFor(note.color) }}>
             {note.name}
           </span>
