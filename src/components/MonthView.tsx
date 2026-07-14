@@ -1,33 +1,22 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AgGridReact } from "ag-grid-react";
 import {
-  AllCommunityModule,
-  ModuleRegistry,
   themeQuartz,
-  type CellClassParams,
   type CellClickedEvent,
   type CellContextMenuEvent,
-  type CellValueChangedEvent,
   type ColDef,
   type GridApi,
   type GridReadyEvent,
   type RowClassParams,
-  type SortChangedEvent,
-  type ValueFormatterParams,
-  type ValueParserParams,
 } from "ag-grid-community";
-import { deleteRefill, loadMonth, loadMonthCounts, updateRefillField } from "../data/refills";
-import { STATUSES, type EditableField, type Lookup, type Lookups, type RefillRow, type RefillStatus } from "../data/types";
-import { copayColor, formatMoney, profitStyle, textColorFor } from "../lib/colors";
-import { noteQualifiesForCallNote } from "../lib/rules";
-import { PillSelectEditor, RefillNoteRenderer, RxCopyRenderer, type GridCtx, type PillItem } from "./gridParts";
+import { loadMonth, loadMonthCounts } from "../data/refills";
+import { STATUSES, type Lookups, type RefillRow, type RefillStatus } from "../data/types";
+import { confirmDeleteRefill, DROPDOWN_FIELDS, dueLabel, refillCols, useDueDateSort, useRefillCellEdit } from "./refillGrid";
+import { RowCtxMenu, type CtxMenuState, type GridCtx } from "./gridParts";
 import OpportunitiesPanel from "./OpportunitiesPanel";
 import RefillDrawer from "./RefillDrawer";
 
-ModuleRegistry.registerModules([AllCommunityModule]);
-
 const MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
-const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
 function currentYm(): string {
   const d = new Date();
@@ -45,18 +34,6 @@ function shiftYm(ym: string, delta: number): string {
   return `${Math.floor(total / 12)}-${String((total % 12) + 1).padStart(2, "0")}`;
 }
 
-function dueLabel(iso: string): string {
-  const [y, m, d] = iso.split("-").map(Number);
-  return `${WEEKDAYS[new Date(y, m - 1, d).getDay()]} ${m}/${d}`;
-}
-
-function toItems(rows: Lookup[], currentId?: number | null): PillItem[] {
-  // Deactivated options leave the dropdown but must stay selectable-looking on the row holding them
-  return rows
-    .filter((r) => r.active === 1 || r.id === currentId)
-    .map((r) => ({ value: r.id, label: r.name, color: r.color, meaning: r.meaning }));
-}
-
 interface Filters {
   day: string | null; // ISO date within the month
   insuranceId: number | null;
@@ -66,29 +43,35 @@ interface Filters {
 
 const NO_FILTERS: Filters = { day: null, insuranceId: null, status: null, unresolvedOnly: false };
 
-// dropdown cells open on a single click (technician feedback, 2026-07-11);
-// text/numeric cells keep double-click so a stray click doesn't start an edit
-const DROPDOWN_FIELDS = new Set(["insurance_id", "secondary_id", "refill_note_id", "call_note_id", "status"]);
+/** Cross-tab jump into the month grid (Overdue drawer history click). `seq` distinguishes repeat requests. */
+export interface MonthNavRequest {
+  id: number;
+  dueDate: string;
+  seq: number;
+}
 
-export default function MonthView({ lookups }: { lookups: Lookups }) {
+interface MonthViewProps {
+  lookups: Lookups;
+  /** false while another tab is shown — reload on re-activation, edits elsewhere may have changed this month */
+  active: boolean;
+  navRequest: MonthNavRequest | null;
+  /** any persisted change (edit/create/delete) — App refreshes the Overdue badge */
+  onDataChanged: () => void;
+}
+
+export default function MonthView({ lookups, active, navRequest, onDataChanged }: MonthViewProps) {
   const [ym, setYm] = useState(currentYm);
   const [rows, setRows] = useState<RefillRow[]>([]);
   const [monthCounts, setMonthCounts] = useState<Map<string, number>>(new Map());
   const [filters, setFilters] = useState<Filters>(NO_FILTERS);
   const [showSecondary, setShowSecondary] = useState(false);
-  const [locked, setLocked] = useState(false);
   const [drawer, setDrawer] = useState<{ kind: "edit"; id: number } | { kind: "create"; dueDate: string } | null>(null);
-  // right-click row menu (delete lives here — deliberately not a one-click affordance)
-  const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number; row: RefillRow } | null>(null);
+  const [ctxMenu, setCtxMenu] = useState<CtxMenuState | null>(null);
   // row to focus (and maybe open) once its month's rows are loaded — history jumps, due-date moves, fresh creates
   const pendingFocusRef = useRef<{ id: number; open: boolean } | null>(null);
 
   const apiRef = useRef<GridApi<RefillRow> | null>(null);
-  const lockedRef = useRef(false);
-  const lockedDirRef = useRef<"asc" | "desc">("asc");
-  const applyingSortRef = useRef(false);
-  const dateOrderRef = useRef(true);
-  const revertingRef = useRef(false);
+  const { locked, toggleLock, resetSort, onSortChanged, isDayBreak } = useDueDateSort(apiRef);
 
   useEffect(() => {
     loadMonth(ym).then(setRows).catch((e) => alert(`Failed to load ${ym}: ${e}`));
@@ -98,6 +81,16 @@ export default function MonthView({ lookups }: { lookups: Lookups }) {
   useEffect(() => {
     loadMonthCounts().then(setMonthCounts).catch(console.error);
   }, []);
+
+  // returning from another tab: edits there may have touched this month — reload, keeping filters
+  const wasActiveRef = useRef(active);
+  useEffect(() => {
+    if (active && !wasActiveRef.current) {
+      loadMonth(ym).then(setRows).catch((e) => alert(`Failed to reload ${ym}: ${e}`));
+      loadMonthCounts().then(setMonthCounts).catch(console.error);
+    }
+    wasActiveRef.current = active;
+  }, [active, ym]);
 
   const filteredRows = useMemo(
     () =>
@@ -166,18 +159,20 @@ export default function MonthView({ lookups }: { lookups: Lookups }) {
   /** drawer persisted a field on `row`; reloadMonth = other rows affected too (due-date move, Rx-wide drug fix) */
   const onRowEdited = useCallback(
     (row: RefillRow, reloadMonth: boolean) => {
+      onDataChanged();
       if (reloadMonth) reloadAfterMove(row.id, row.due_date, true);
       else setRows((prev) => [...prev]); // re-derive filters/shading from the mutated row
     },
-    [reloadAfterMove],
+    [reloadAfterMove, onDataChanged],
   );
 
   const onCreated = useCallback(
     (id: number, dueDate: string) => {
       setDrawer(null);
+      onDataChanged();
       reloadAfterMove(id, dueDate, false);
     },
-    [reloadAfterMove],
+    [reloadAfterMove, onDataChanged],
   );
 
   /** jump to a refill anywhere (drawer history click, duplicate-open) */
@@ -195,6 +190,14 @@ export default function MonthView({ lookups }: { lookups: Lookups }) {
     },
     [ym],
   );
+
+  // the Overdue tab asked to open a refill here (drawer history click on a non-overdue row)
+  const navSeqRef = useRef(0);
+  useEffect(() => {
+    if (!navRequest || navRequest.seq === navSeqRef.current) return;
+    navSeqRef.current = navRequest.seq;
+    onOpenRefill(navRequest.id, navRequest.dueDate);
+  }, [navRequest, onOpenRefill]);
 
   const openCreate = useCallback(
     () => setDrawer({ kind: "create", dueDate: filters.day ?? `${ym}-01` }),
@@ -230,21 +233,13 @@ export default function MonthView({ lookups }: { lookups: Lookups }) {
   const deleteRow = useCallback(
     async (row: RefillRow) => {
       setCtxMenu(null);
-      const ok = window.confirm(
-        `Delete Rx ${row.rx_number} — ${row.drug_name}, due ${dueLabel(row.due_date)}?\nThis permanently removes the row.`,
-      );
-      if (!ok) return;
-      try {
-        await deleteRefill(row.id);
-      } catch (err) {
-        alert(`Delete failed.\n${err}`);
-        return;
-      }
+      if (!(await confirmDeleteRefill(row))) return;
       setDrawer((d) => (d?.kind === "edit" && d.id === row.id ? null : d));
+      onDataChanged();
       loadMonthCounts().then(setMonthCounts).catch(console.error);
       loadMonth(ym).then(setRows).catch((e) => alert(`Failed to reload ${ym}: ${e}`));
     },
-    [ym],
+    [ym, onDataChanged],
   );
 
   const onCellContextMenu = useCallback((e: CellContextMenuEvent<RefillRow>) => {
@@ -253,98 +248,20 @@ export default function MonthView({ lookups }: { lookups: Lookups }) {
     setCtxMenu({ x: ev.clientX, y: ev.clientY, row: e.data });
   }, []);
 
-  // any click elsewhere, Esc, or scroll dismisses the context menu
-  useEffect(() => {
-    if (!ctxMenu) return;
-    const dismiss = () => setCtxMenu(null);
-    const onKey = (e: KeyboardEvent) => e.key === "Escape" && dismiss();
-    window.addEventListener("mousedown", dismiss);
-    window.addEventListener("wheel", dismiss, { passive: true });
-    window.addEventListener("keydown", onKey);
-    return () => {
-      window.removeEventListener("mousedown", dismiss);
-      window.removeEventListener("wheel", dismiss);
-      window.removeEventListener("keydown", onKey);
-    };
-  }, [ctxMenu]);
-
-  // ----- sorting: day separators + due-date lock ---------------------------
-
-  const recomputeDateOrder = useCallback((api: GridApi<RefillRow>) => {
-    const sorted = api
-      .getColumnState()
-      .filter((s) => s.sort)
-      .sort((a, b) => (a.sortIndex ?? 0) - (b.sortIndex ?? 0));
-    // unsorted grid displays query order, which is due-date order
-    dateOrderRef.current = sorted.length === 0 || sorted[0].colId === "due_date";
-  }, []);
-
-  const enforceLock = useCallback((api: GridApi<RefillRow>) => {
-    const sorted = api
-      .getColumnState()
-      .filter((s) => s.sort)
-      .sort((a, b) => (a.sortIndex ?? 0) - (b.sortIndex ?? 0));
-    const due = sorted.find((s) => s.colId === "due_date");
-    if (due?.sort === "asc" || due?.sort === "desc") lockedDirRef.current = due.sort;
-    const secondary = sorted.find((s) => s.colId !== "due_date");
-    applyingSortRef.current = true;
-    api.applyColumnState({
-      state: [
-        { colId: "due_date", sort: lockedDirRef.current, sortIndex: 0 },
-        ...(secondary ? [{ colId: secondary.colId, sort: secondary.sort, sortIndex: 1 }] : []),
-      ],
-      defaultState: { sort: null },
-    });
-    applyingSortRef.current = false;
-  }, []);
-
-  const onSortChanged = useCallback(
-    (e: SortChangedEvent<RefillRow>) => {
-      if (applyingSortRef.current) return;
-      if (lockedRef.current) enforceLock(e.api);
-      recomputeDateOrder(e.api);
-      e.api.redrawRows(); // spike learning: row classes only compute on draw
-    },
-    [enforceLock, recomputeDateOrder],
-  );
-
-  const toggleLock = () => {
-    const next = !locked;
-    setLocked(next);
-    lockedRef.current = next;
-    const api = apiRef.current;
-    if (!api) return;
-    if (next) enforceLock(api);
-    recomputeDateOrder(api);
-    api.redrawRows();
-  };
-
-  const resetSort = () => {
-    setLocked(false);
-    lockedRef.current = false;
-    lockedDirRef.current = "asc";
-    const api = apiRef.current;
-    if (!api) return;
-    applyingSortRef.current = true;
-    api.applyColumnState({ state: [{ colId: "due_date", sort: "asc", sortIndex: 0 }], defaultState: { sort: null } });
-    applyingSortRef.current = false;
-    recomputeDateOrder(api);
-    api.redrawRows();
-  };
+  // ----- row classes: day separators (shared hook) + opportunity hover -------
 
   // hovering an Opportunities card highlights its grid row (checked at draw time)
   const oppHoverIdRef = useRef<number | null>(null);
 
-  const getRowClass = useCallback((params: RowClassParams<RefillRow>): string[] | undefined => {
-    const classes: string[] = [];
-    // day separators only while the grid is in due-date order (story 1.1)
-    if (dateOrderRef.current && params.node.rowIndex != null && params.node.rowIndex > 0) {
-      const prev = params.api.getDisplayedRowAtIndex(params.node.rowIndex - 1);
-      if (prev?.data && params.data && prev.data.due_date !== params.data.due_date) classes.push("day-break");
-    }
-    if (params.data && params.data.id === oppHoverIdRef.current) classes.push("opp-hover");
-    return classes.length ? classes : undefined;
-  }, []);
+  const getRowClass = useCallback(
+    (params: RowClassParams<RefillRow>): string[] | undefined => {
+      const classes: string[] = [];
+      if (isDayBreak(params)) classes.push("day-break");
+      if (params.data && params.data.id === oppHoverIdRef.current) classes.push("opp-hover");
+      return classes.length ? classes : undefined;
+    },
+    [isDayBreak],
+  );
 
   const setOppHover = useCallback((id: number | null) => {
     const prev = oppHoverIdRef.current;
@@ -359,227 +276,34 @@ export default function MonthView({ lookups }: { lookups: Lookups }) {
     if (nodes.length) api.redrawRows({ rowNodes: nodes });
   }, []);
 
-  // ----- edits: immediate persistence + business rules ---------------------
+  // ----- edits: immediate persistence + business rules (shared with Overdue) --
 
-  const persist = useCallback(async (row: RefillRow, field: EditableField, value: unknown) => {
-    const res = await updateRefillField(row.id, field, value ?? null);
-    if (res.refill_note_set_at !== undefined) row.refill_note_set_at = res.refill_note_set_at;
-  }, []);
+  const onMutated = useCallback(() => {
+    setRows((prev) => [...prev]); // re-derive filters/shading from the mutated row
+    onDataChanged();
+  }, [onDataChanged]);
 
-  const onCellValueChanged = useCallback(
-    async (e: CellValueChangedEvent<RefillRow>) => {
-      if (revertingRef.current) return;
-      const field = e.colDef.field as EditableField;
-      const row = e.data;
-      try {
-        // call-note gating: never silently wipe a call note (story 1.5)
-        if (field === "refill_note_id" && !noteQualifiesForCallNote(e.newValue, lookups) && row.call_note_id != null) {
-          const cn = lookups.callNotes.find((c) => c.id === row.call_note_id)?.name ?? "";
-          if (!window.confirm(`This refill note doesn't use call notes — the call note "${cn}" will be cleared. Continue?`)) {
-            revertingRef.current = true;
-            e.node.setDataValue(field, e.oldValue);
-            revertingRef.current = false;
-            return;
-          }
-          row.call_note_id = null;
-          await persist(row, "call_note_id", null);
-        }
-        await persist(row, field, e.newValue);
-      } catch (err) {
-        alert(`Save failed — the change was undone.\n${err}`);
-        revertingRef.current = true;
-        e.node.setDataValue(field, e.oldValue);
-        revertingRef.current = false;
-        return;
-      }
-      setRows((prev) => [...prev]); // re-derive filters/shading from the mutated row
-    },
-    [lookups, persist],
-  );
+  const onCellValueChanged = useRefillCellEdit(lookups, onMutated);
 
-  // ----- columns ------------------------------------------------------------
+  // ----- columns (shared defs, month assembly) --------------------------------
 
   const columnDefs = useMemo<ColDef<RefillRow>[]>(() => {
-    const lookupCell = (list: Lookup[]) => (p: CellClassParams<RefillRow>) => {
-      const item = list.find((l) => l.id === p.value);
-      return item ? { backgroundColor: item.color, color: textColorFor(item.color) } : undefined;
-    };
-    const lookupName = (list: Lookup[]) => (p: ValueFormatterParams<RefillRow>) =>
-      list.find((l) => l.id === p.value)?.name ?? "";
-    const moneyParser = (p: ValueParserParams<RefillRow>) => {
-      const t = String(p.newValue ?? "").replace(/[$,\s]/g, "");
-      if (t === "") return null;
-      const n = Number(t);
-      return Number.isFinite(n) ? n : p.oldValue;
-    };
-
+    const c = refillCols(lookups, { nimbleCounter: true });
     return [
-      {
-        field: "rx_number",
-        headerName: "Rx #",
-        pinned: "left",
-        width: 118,
-        cellRenderer: RxCopyRenderer,
-        sortable: false,
-      },
-      {
-        field: "drug_name",
-        headerName: "Drug",
-        pinned: "left",
-        width: 210,
-        tooltipField: "drug_name",
-        cellClass: "open-drawer",
-      },
-      {
-        field: "due_date",
-        headerName: "Due",
-        width: 105,
-        valueFormatter: (p) => (p.value ? dueLabel(p.value) : ""),
-        cellClass: "open-drawer",
-      },
-      {
-        field: "insurance_id",
-        headerName: "Insurance",
-        width: 170,
-        editable: true,
-        cellEditor: PillSelectEditor,
-        cellEditorPopup: true,
-        cellEditorParams: { items: toItems(lookups.insurances), allowClear: true },
-        valueFormatter: lookupName(lookups.insurances),
-        cellStyle: lookupCell(lookups.insurances),
-        comparator: (a, b) => {
-          const name = (id: number | null) => lookups.insurances.find((i) => i.id === id)?.name ?? "";
-          return name(a).localeCompare(name(b));
-        },
-      },
-      {
-        field: "secondary_id",
-        headerName: "Secondary",
-        width: 130,
-        hide: !showSecondary,
-        editable: true,
-        cellEditor: PillSelectEditor,
-        cellEditorPopup: true,
-        cellEditorParams: { items: toItems(lookups.secondaryCoverages), allowClear: true },
-        valueFormatter: lookupName(lookups.secondaryCoverages),
-        cellStyle: lookupCell(lookups.secondaryCoverages),
-      },
-      {
-        field: "refill_note_id",
-        headerName: "Refill Note",
-        width: 160,
-        editable: true,
-        cellEditor: PillSelectEditor,
-        cellEditorPopup: true,
-        cellEditorParams: { items: toItems(lookups.refillNotes), allowClear: true },
-        cellRenderer: RefillNoteRenderer,
-        cellStyle: lookupCell(lookups.refillNotes),
-        comparator: (a, b) => {
-          const order = (id: number | null) => lookups.refillNotes.find((n) => n.id === id)?.sort_order ?? 9999;
-          return order(a) - order(b);
-        },
-      },
-      {
-        field: "call_note_id",
-        headerName: "Call Note",
-        width: 170,
-        editable: (p) => noteQualifiesForCallNote(p.data?.refill_note_id, lookups),
-        cellEditor: PillSelectEditor,
-        cellEditorPopup: true,
-        cellEditorParams: { items: toItems(lookups.callNotes), allowClear: true },
-        valueFormatter: lookupName(lookups.callNotes),
-        cellStyle: (p) => {
-          if (!noteQualifiesForCallNote(p.data?.refill_note_id, lookups)) {
-            return { backgroundColor: "#f2f2f2", color: "#bbb" };
-          }
-          return lookupCell(lookups.callNotes)(p);
-        },
-        cellClass: (p) => (noteQualifiesForCallNote(p.data?.refill_note_id, lookups) ? undefined : "gated"),
-      },
-      {
-        field: "old_copay",
-        headerName: "Old Copay",
-        width: 110,
-        editable: true,
-        valueParser: moneyParser,
-        valueFormatter: (p) => formatMoney(p.value),
-        cellStyle: (p) => {
-          const bg = copayColor(p.value, lookups.settings.copayTiers);
-          return bg ? { backgroundColor: bg, color: textColorFor(bg) } : undefined;
-        },
-        type: "rightAligned",
-      },
-      {
-        field: "new_copay",
-        headerName: "New Copay",
-        width: 110,
-        editable: true,
-        valueParser: moneyParser,
-        valueFormatter: (p) => formatMoney(p.value),
-        cellStyle: (p) => {
-          const bg = copayColor(p.value, lookups.settings.copayTiers);
-          return bg ? { backgroundColor: bg, color: textColorFor(bg) } : undefined;
-        },
-        type: "rightAligned",
-      },
-      {
-        field: "old_profit",
-        headerName: "Old Profit",
-        width: 110,
-        editable: true,
-        valueParser: moneyParser,
-        valueFormatter: (p) => formatMoney(p.value),
-        cellStyle: (p) => profitStyle(p.value, (p.context as GridCtx).profitMax),
-        type: "rightAligned",
-      },
-      {
-        field: "new_profit",
-        headerName: "New Profit",
-        width: 110,
-        editable: true,
-        valueParser: moneyParser,
-        valueFormatter: (p) => formatMoney(p.value),
-        cellStyle: (p) => profitStyle(p.value, (p.context as GridCtx).profitMax),
-        type: "rightAligned",
-      },
-      {
-        field: "refills_filled",
-        headerName: "Refills",
-        width: 85,
-        editable: true,
-        valueParser: (p) => {
-          const t = String(p.newValue ?? "").trim();
-          if (t === "") return null;
-          const n = Number(t);
-          return Number.isInteger(n) && n >= 0 ? n : p.oldValue;
-        },
-        type: "rightAligned",
-      },
-      {
-        field: "status",
-        headerName: "Status",
-        width: 125,
-        editable: true,
-        cellEditor: PillSelectEditor,
-        cellEditorPopup: true,
-        cellEditorParams: {
-          items: STATUSES.map((s) => ({ value: s, label: s, color: lookups.settings.statusColors[s] ?? "#eeeeee" })),
-          allowClear: false,
-        },
-        cellStyle: (p) => {
-          const bg = lookups.settings.statusColors[p.value as string];
-          return bg ? { backgroundColor: bg, color: textColorFor(bg) } : undefined;
-        },
-        comparator: (a, b) => STATUSES.indexOf(a) - STATUSES.indexOf(b),
-      },
-      {
-        field: "notes",
-        headerName: "Notes",
-        flex: 1,
-        minWidth: 180,
-        editable: true,
-        tooltipField: "notes",
-      },
+      c.rx,
+      c.drug,
+      c.due,
+      c.insurance,
+      { ...c.secondary, hide: !showSecondary },
+      c.refillNote,
+      c.callNote,
+      c.oldCopay,
+      c.newCopay,
+      c.oldProfit,
+      c.newProfit,
+      c.refillsFilled,
+      c.status,
+      c.notes,
     ];
   }, [lookups, showSecondary]);
 
@@ -732,16 +456,7 @@ export default function MonthView({ lookups }: { lookups: Lookups }) {
       />
       </div>
 
-      {ctxMenu && (
-        <div className="ctx-menu" style={{ left: ctxMenu.x, top: ctxMenu.y }} onMouseDown={(e) => e.stopPropagation()}>
-          <div className="ctx-menu-header">
-            Rx {ctxMenu.row.rx_number} · {ctxMenu.row.drug_name}
-          </div>
-          <button className="ctx-menu-item danger" onClick={() => deleteRow(ctxMenu.row)}>
-            Delete refill…
-          </button>
-        </div>
-      )}
+      {ctxMenu && <RowCtxMenu menu={ctxMenu} onDelete={deleteRow} onDismiss={() => setCtxMenu(null)} />}
 
       {drawer?.kind === "create" && (
         <RefillDrawer

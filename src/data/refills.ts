@@ -55,6 +55,36 @@ export async function loadOpportunities(fromIso: string, toIso: string, minProfi
   return { rows, maxDue: mx[0]?.max_due ?? null };
 }
 
+/** Local calendar date as ISO yyyy-mm-dd (due dates are date-only; UTC would flip the day near midnight). */
+export function todayIso(): string {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
+/** Overdue tab (story 1.7): Pending rows past their due date plus every MISSED row, all months, oldest first. */
+export async function loadOverdue(today: string): Promise<RefillRow[]> {
+  const db = await getDb();
+  return db.select<RefillRow[]>(
+    `${ROW_SELECT} WHERE (r.status = 'Pending' AND r.due_date < $1) OR r.status = 'MISSED'
+     ORDER BY r.due_date, r.id`,
+    [today],
+  );
+}
+
+/**
+ * Actionable overdue count for the tab badge — Pending past-due only. MISSED rows
+ * stay in the tab forever as the permanent record, so counting them would grow the
+ * badge unboundedly and bury the "work this now" signal.
+ */
+export async function loadOverduePendingCount(today: string): Promise<number> {
+  const db = await getDb();
+  const rows = await db.select<{ n: number }[]>(
+    "SELECT COUNT(*) AS n FROM refills WHERE status = 'Pending' AND due_date < $1",
+    [today],
+  );
+  return rows[0]?.n ?? 0;
+}
+
 /** Rows per month ("2026-07" → count), for the month picker's data-presence indicators. */
 export async function loadMonthCounts(): Promise<Map<string, number>> {
   const db = await getDb();

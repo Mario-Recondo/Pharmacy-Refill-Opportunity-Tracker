@@ -109,6 +109,50 @@ export function RxCopyRenderer(props: CustomCellRendererProps<RefillRow>) {
 }
 
 // ---------------------------------------------------------------------------
+// Right-click row menu (story 2.4): delete lives here — deliberately not a
+// one-click affordance. Any click elsewhere, Esc, or scroll dismisses it.
+// ---------------------------------------------------------------------------
+
+export interface CtxMenuState {
+  x: number;
+  y: number;
+  row: RefillRow;
+}
+
+export function RowCtxMenu({
+  menu,
+  onDelete,
+  onDismiss,
+}: {
+  menu: CtxMenuState;
+  onDelete: (row: RefillRow) => void;
+  onDismiss: () => void;
+}) {
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && onDismiss();
+    window.addEventListener("mousedown", onDismiss);
+    window.addEventListener("wheel", onDismiss, { passive: true });
+    window.addEventListener("keydown", onKey);
+    return () => {
+      window.removeEventListener("mousedown", onDismiss);
+      window.removeEventListener("wheel", onDismiss);
+      window.removeEventListener("keydown", onKey);
+    };
+  }, [onDismiss]);
+
+  return (
+    <div className="ctx-menu" style={{ left: menu.x, top: menu.y }} onMouseDown={(e) => e.stopPropagation()}>
+      <div className="ctx-menu-header">
+        Rx {menu.row.rx_number} · {menu.row.drug_name}
+      </div>
+      <button className="ctx-menu-item danger" onClick={() => onDelete(menu.row)}>
+        Delete refill…
+      </button>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Refill Note cell: note name plus, for Nimble Link, a days-since-sent counter
 // (story 1.9) that turns red once it reaches the Settings threshold.
 // ---------------------------------------------------------------------------
