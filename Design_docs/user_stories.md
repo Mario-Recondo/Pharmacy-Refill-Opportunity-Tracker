@@ -165,13 +165,22 @@ Acceptance criteria:
 **4.1 — Manage dropdown vocabularies**
 As a technician, I want to add/edit/retire insurances, secondary coverages, refill notes, and call notes (with their colors) in Settings, so that a new payer or workflow term never requires a code change.
 
-Acceptance criteria:
-- Each lookup list supports add, rename, recolor, reorder, and deactivate (deactivated options stay on historical rows but leave the dropdowns).
-- Insurances have a Medicare/Medicaid flag that applies the uniform group color automatically.
-- Secondary coverages are managed exactly like insurances; the list ships with a single seeded option, `Coupon`.
+Acceptance criteria (revised 2026-07-14 alongside story 4.5 — design doc §6.6):
+- Each lookup list supports add, inline rename, reorder (up/down buttons), and deactivate via a per-row kebab menu (deactivated options stay on historical rows but leave the dropdowns; greyed section at the bottom with Reactivate).
+- Delete exists only for options nothing references (live check + confirmation); referenced options can only be deactivated.
+- Recolor applies to refill/call notes only — insurance and secondary colors are retired by the logo feature (4.5).
+- Insurances carry independent Medicare and Medicaid designation flags (kebab checkmarks) that append "(Medicare)" / "(Medicaid)" to the displayed name. (Supersedes the original single flag + uniform group color.)
+- Refill notes expose their behavior flags ("prompts for a call note", "shows the days-since-sent counter") as checkboxes, so rules never depend on an option's name and renames are always safe.
+- Secondary coverages get the same CRUD affordances; the list ships with a single seeded option, `Coupon` (with the coupon logo).
 
 **4.2 — Tune thresholds**
-As a technician, I want to edit copay tier boundaries and alert thresholds (X days, $Y), so that the tool matches how our pharmacy actually prioritizes.
+As a technician, I want to edit copay tier boundaries and alert thresholds (X days, $Y, Nimble Link aging days), so that the tool matches how our pharmacy actually prioritizes.
+
+Acceptance criteria (2026-07-14):
+- Copay tiers are fully editable: add/remove tiers, boundary + color per tier, unbounded top tier; boundaries enforced strictly ascending.
+- Alert look-ahead days, alert minimum profit, and Nimble Link aging days are editable numbers.
+- Changes take effect app-wide without restart (grid recolors, Opportunities recomputes on next view).
+- Status colors are not exposed in v1.
 
 **4.3 — Back up and restore my data**
 As a technician, I want one-click backup and restore of the database, so that a computer failure can't erase months of tracking.
@@ -185,14 +194,16 @@ Acceptance criteria:
 **4.4 — Just open it**
 As a technician, I want the tool to be a single .exe I double-click, so that I don't need to install anything or run commands.
 
-**4.5 — Insurance master-brand logos** *(pending assets — needs logo images, brand mapping, and Medicare/Medicaid designations; see design doc §8.3)*
+**4.5 — Insurance master-brand logos** *(assets arrived 2026-07-14; folded into M5 — design doc §4.3, §6.1, §6.6)*
 As a technician, I want each insurance to show its master brand's official logo next to its name, so that plans group visually by insurer without memorizing colors.
 
-Acceptance criteria (to finalize once the inputs arrive):
-- Grid Insurance cells show the plan name with the master-brand logo to its right, replacing the color fill.
-- Settings organizes insurances under master-brand groups (all BC/BS variants under one BCBS group, etc.); adding a new insurance files it into a group.
-- Plans combined with Medicare or Medicaid show "(Medicare)" / "(Medicaid)" after the name, alongside the group logo.
-- Logo images are bundled/stored locally (offline, single-exe constraint).
+Acceptance criteria (finalized 2026-07-14):
+- Grid Insurance cells show the plan name with the master-brand logo to its right, replacing the color fill. The rule is logo or nothing: plans in a logo-less group (Independent PBMs, until its logo arrives) and ungrouped plans render as plain name — no color fallback.
+- A plan belongs to at most one brand group (`group_id`, nullable); Medicare/Medicaid are independent designation flags, not groups. Ungrouped plans sit in an "Ungrouped" section in Settings and can be filed via "Move to group…".
+- Settings organizes insurances under master-brand groups; groups are data (add/rename/reorder/move plans), logos are a bundled fixed set a group picks from — new artwork requires a new build.
+- Designated plans show "(Medicare)" / "(Medicaid)" after the name everywhere the name renders; dropdowns stay text-only (logos in cell display and Settings).
+- Secondary coverages carry a direct per-row logo (no groups); Coupon ships with the coupon logo.
+- Logo images are bundled into the exe (offline, single-exe constraint).
 
 ---
 
