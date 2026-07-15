@@ -483,6 +483,12 @@ body {
   box-shadow: inset 0 0 0 2px #e6a700;
 }
 
+/* row whose detail drawer is open — ink outline (chrome, not business color), stays until close */
+.ag-row.drawer-open {
+  background-color: var(--ink-tint) !important;
+  box-shadow: inset 0 0 0 2px var(--ink);
+}
+
 .rx-copy {
   cursor: pointer;
   font-variant-numeric: tabular-nums;

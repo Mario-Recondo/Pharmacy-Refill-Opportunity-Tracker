@@ -253,16 +253,34 @@ export default function MonthView({ lookups, active, navRequest, onDataChanged }
 
   // hovering an Opportunities card highlights its grid row (checked at draw time)
   const oppHoverIdRef = useRef<number | null>(null);
+  // the row whose detail drawer is open stays highlighted until it closes
+  const drawerRowIdRef = useRef<number | null>(null);
 
   const getRowClass = useCallback(
     (params: RowClassParams<RefillRow>): string[] | undefined => {
       const classes: string[] = [];
       if (isDayBreak(params)) classes.push("day-break");
       if (params.data && params.data.id === oppHoverIdRef.current) classes.push("opp-hover");
+      if (params.data && params.data.id === drawerRowIdRef.current) classes.push("drawer-open");
       return classes.length ? classes : undefined;
     },
     [isDayBreak],
   );
+
+  // row classes compute at draw time, so redraw the rows entering/leaving the highlight
+  const drawerRowId = drawer?.kind === "edit" ? drawer.id : null;
+  useEffect(() => {
+    const prev = drawerRowIdRef.current;
+    if (prev === drawerRowId) return;
+    drawerRowIdRef.current = drawerRowId;
+    const api = apiRef.current;
+    if (!api) return;
+    const nodes = [prev, drawerRowId]
+      .filter((v): v is number => v != null)
+      .map((v) => api.getRowNode(String(v)))
+      .filter((n) => n != null);
+    if (nodes.length) api.redrawRows({ rowNodes: nodes });
+  }, [drawerRowId]);
 
   const setOppHover = useCallback((id: number | null) => {
     const prev = oppHoverIdRef.current;
