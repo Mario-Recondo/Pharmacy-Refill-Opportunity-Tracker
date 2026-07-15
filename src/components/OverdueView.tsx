@@ -186,8 +186,29 @@ export default function OverdueView({ lookups, active, onOpenInMonth, onDataChan
     setCtxMenu({ x: ev.clientX, y: ev.clientY, row: e.data });
   }, []);
 
+  // the row whose detail drawer is open stays highlighted until it closes;
+  // row classes compute at draw time, so redraw the rows entering/leaving it
+  const drawerRowIdRef = useRef<number | null>(null);
+  useEffect(() => {
+    const prev = drawerRowIdRef.current;
+    if (prev === drawerId) return;
+    drawerRowIdRef.current = drawerId;
+    const api = apiRef.current;
+    if (!api) return;
+    const nodes = [prev, drawerId]
+      .filter((v): v is number => v != null)
+      .map((v) => api.getRowNode(String(v)))
+      .filter((n) => n != null);
+    if (nodes.length) api.redrawRows({ rowNodes: nodes });
+  }, [drawerId]);
+
   const getRowClass = useCallback(
-    (params: RowClassParams<RefillRow>): string[] | undefined => (isDayBreak(params) ? ["day-break"] : undefined),
+    (params: RowClassParams<RefillRow>): string[] | undefined => {
+      const classes: string[] = [];
+      if (isDayBreak(params)) classes.push("day-break");
+      if (params.data && params.data.id === drawerRowIdRef.current) classes.push("drawer-open");
+      return classes.length ? classes : undefined;
+    },
     [isDayBreak],
   );
 
