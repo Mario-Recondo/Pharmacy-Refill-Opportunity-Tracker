@@ -203,21 +203,17 @@ async function noteName(db: Db, table: "refill_notes" | "call_notes", id: number
   return rows[0]?.name ?? null;
 }
 
-/** [start, end) of the local calendar day as UTC ISO strings — event timestamps are UTC ISO. */
-function localDayBounds(): [string, string] {
-  const start = new Date();
-  start.setHours(0, 0, 0, 0);
-  const end = new Date(start);
-  end.setDate(end.getDate() + 1);
-  return [start.toISOString(), end.toISOString()];
-}
-
 /**
- * Append a workflow event with same-day collapse (accident-proofing): repeated
- * changes to the same field on the same local day merge into one event, and a
- * set-then-revert nets out to no event at all. What survives is the real
- * once-a-day-or-slower cadence of contact attempts.
+ * Accident-proofing settling window: a change to the same field within this
+ * long of the previous one is treated as a correction of that change (merged
+ * in place; deleted outright on a full revert), not new history. Anything
+ * that survives the window is a real workflow step and stays — "LVM+RSL,
+ * then the patient called back and it became P/U" must both show in Activity
+ * (user decision 2026-07-15, replacing an earlier same-calendar-day rule that
+ * erased exactly that sequence). The window rolls: each merged edit restarts it.
  */
+const EVENT_SETTLE_MS = 2 * 60_000;
+
 async function logWorkflowEvent(
   db: Db,
   refillId: number,
@@ -227,28 +223,28 @@ async function logWorkflowEvent(
   profit: number | null,
 ): Promise<void> {
   if (oldValue === newValue) return;
-  const now = new Date().toISOString();
-  const [dayStart, dayEnd] = localDayBounds();
-  const today = await db.select<{ id: number; old_value: string | null }[]>(
+  const now = new Date();
+  const windowStart = new Date(now.getTime() - EVENT_SETTLE_MS).toISOString();
+  const recent = await db.select<{ id: number; old_value: string | null }[]>(
     `SELECT id, old_value FROM refill_events
-     WHERE refill_id = $1 AND kind = $2 AND at >= $3 AND at < $4
+     WHERE refill_id = $1 AND kind = $2 AND at >= $3
      ORDER BY at DESC, id DESC LIMIT 1`,
-    [refillId, kind, dayStart, dayEnd],
+    [refillId, kind, windowStart],
   );
-  if (today[0]) {
-    if (today[0].old_value === newValue) {
-      // back where the day started — the change and its revert cancel out
-      await db.execute("DELETE FROM refill_events WHERE id = $1", [today[0].id]);
+  if (recent[0]) {
+    if (recent[0].old_value === newValue) {
+      // back where it was before the correction started — the pair cancels out
+      await db.execute("DELETE FROM refill_events WHERE id = $1", [recent[0].id]);
     } else {
       await db.execute("UPDATE refill_events SET new_value = $1, at = $2, profit = $3 WHERE id = $4", [
-        newValue, now, profit, today[0].id,
+        newValue, now.toISOString(), profit, recent[0].id,
       ]);
     }
     return;
   }
   await db.execute(
     "INSERT INTO refill_events (refill_id, at, kind, old_value, new_value, profit) VALUES ($1, $2, $3, $4, $5, $6)",
-    [refillId, now, kind, oldValue, newValue, profit],
+    [refillId, now.toISOString(), kind, oldValue, newValue, profit],
   );
 }
 

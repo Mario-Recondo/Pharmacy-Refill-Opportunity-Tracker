@@ -907,7 +907,7 @@ body {
 
 .activity-date {
   flex: none;
-  width: 88px;
+  width: 150px;
   color: #98a2b1;
   font-variant-numeric: tabular-nums;
 }

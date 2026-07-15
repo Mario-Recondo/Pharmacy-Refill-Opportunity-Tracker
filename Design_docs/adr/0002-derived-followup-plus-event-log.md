@@ -28,8 +28,10 @@ Analytics are served instead by an append-only **`refill_events`** log:
 technician changes to refill note / call note / status (with a `new_profit`
 snapshot on `Checked Out`), plus `followup_entered`/`followup_left` span
 events reconciled by an idempotent sweep on launch, data change and day
-rollover. Same-day changes to the same field collapse to one event, so
-accidental edits don't pollute the record.
+rollover. Changes to the same field within a 2-minute settling window
+collapse to one event, so accidental edits corrected on the spot don't
+pollute the record while real same-day sequences (voicemail, patient calls
+back, pickup scheduled) all stay.
 
 ## Alternatives considered
 

@@ -53,9 +53,15 @@ function daysApart(a: string, b: string): number {
   return Math.round(Math.abs(new Date(a).getTime() - new Date(b).getTime()) / 86_400_000);
 }
 
-/** Event timestamps are UTC ISO; shown as the local calendar date. */
+/** Event timestamps are UTC ISO; shown as local date + time (same-day sequences like LVM→P/U need the time). */
 function eventDate(atIso: string): string {
-  return new Date(atIso).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
+  return new Date(atIso).toLocaleString(undefined, {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  });
 }
 
 function eventLabel(e: RefillEvent): string {
