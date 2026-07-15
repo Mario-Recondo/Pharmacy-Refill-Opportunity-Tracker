@@ -383,6 +383,7 @@ function FlatSection({
   withColor,
   withLogo,
   withNoteFlags,
+  withFollowupFlag,
 }: Omit<SettingsProps, "lookups"> & {
   table: LookupTable;
   rows: Lookup[];
@@ -390,6 +391,7 @@ function FlatSection({
   withColor?: boolean;
   withLogo?: boolean;
   withNoteFlags?: boolean;
+  withFollowupFlag?: boolean;
 }) {
   const wrap = (p: Promise<unknown>) => p.then(onChanged).catch((e) => alert(`Save failed.\n${e}`));
   const { active, inactive } = splitActive(rows);
@@ -430,6 +432,18 @@ function FlatSection({
               onChange={(e) => wrap(setLookupFlag(table, r.id, "shows_age_counter", e.target.checked))}
             />
             day counter
+          </label>
+        </span>
+      )}
+      {withFollowupFlag && (
+        <span className="s-flags">
+          <label title="Rows with this call note surface on the Req Follow Up tab once the patient stays quiet past the wait threshold">
+            <input
+              type="checkbox"
+              checked={r.requires_followup === 1}
+              onChange={(e) => wrap(setLookupFlag(table, r.id, "requires_followup", e.target.checked))}
+            />
+            req follow-up
           </label>
         </span>
       )}
@@ -533,6 +547,7 @@ function ThresholdsSection({ lookups, onChanged }: SettingsProps) {
       <NumberSetting label="Look-ahead window (days)" value={s.alertLookaheadDays} settingKey="alert_lookahead_days" onChanged={onChanged} />
       <NumberSetting label="Minimum last-verified profit" value={s.alertMinProfit} settingKey="alert_min_profit" onChanged={onChanged} prefix="$" />
       <NumberSetting label="Nimble Link aging alert (days)" value={s.nimbleLinkAlertDays} settingKey="nimble_link_alert_days" onChanged={onChanged} min={1} />
+      <NumberSetting label="Req Follow Up wait (days quiet)" value={s.followupWaitDays} settingKey="followup_wait_days" onChanged={onChanged} min={1} />
 
       <h3 className="s-sub">Copay color tiers</h3>
       <p className="s-hint">Each tier colors copays up to its boundary; the last tier covers everything above.</p>
@@ -738,6 +753,7 @@ export default function SettingsView({ lookups, onChanged }: SettingsProps) {
             rows={lookups.callNotes}
             what="call note"
             withColor
+            withFollowupFlag
           />
         )}
         {section === "thresholds" && <ThresholdsSection lookups={lookups} onChanged={onChanged} />}

@@ -48,7 +48,7 @@ export async function recolorLookup(table: "refill_notes" | "call_notes", id: nu
 export async function setLookupFlag(
   table: LookupTable | "insurance_groups",
   id: number,
-  flag: "allows_call_note" | "shows_age_counter" | "is_medicare" | "is_medicaid",
+  flag: "allows_call_note" | "shows_age_counter" | "requires_followup" | "is_medicare" | "is_medicaid",
   on: boolean,
 ): Promise<void> {
   const db = await getDb();
