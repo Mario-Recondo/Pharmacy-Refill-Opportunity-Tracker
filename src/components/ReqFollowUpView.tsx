@@ -60,7 +60,9 @@ export default function ReqFollowUpView({ lookups, active, onOpenInMonth, onData
   const [drawerId, setDrawerId] = useState<number | null>(null);
   const [ctxMenu, setCtxMenu] = useState<CtxMenuState | null>(null);
   const apiRef = useRef<GridApi<RefillRow> | null>(null);
-  const { locked, toggleLock, resetSort, onSortChanged, isDayBreak } = useDueDateSort(apiRef);
+  // unsorted = days-quiet query order here, not due-date order — day separators
+  // only make sense once the user explicitly sorts by Due
+  const { locked, toggleLock, resetSort, onSortChanged, isDayBreak } = useDueDateSort(apiRef, { unsortedIsDateOrder: false });
 
   const waitDays = lookups.settings.followupWaitDays;
 

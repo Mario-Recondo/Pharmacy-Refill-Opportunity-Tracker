@@ -147,8 +147,21 @@ export async function loadRefillEvents(refillId: number): Promise<RefillEvent[]>
  * leave). Idempotent and read-mostly; never mutates refills. Runs on launch,
  * after any data change, and on day rollover. Spans of since-deleted rows
  * close here too (they stop qualifying).
+ *
+ * Sweeps are serialized: two overlapping runs would both read the open-span
+ * set before either writes and double-insert span events (seen live under
+ * StrictMode's doubled launch effect; any two rapid mutations could race the
+ * same way).
  */
-export async function sweepFollowupSpans(waitDays: number): Promise<void> {
+let sweepChain: Promise<void> = Promise.resolve();
+
+export function sweepFollowupSpans(waitDays: number): Promise<void> {
+  const run = sweepChain.then(() => doSweepFollowupSpans(waitDays));
+  sweepChain = run.catch(() => {}); // a failed sweep must not wedge the chain
+  return run;
+}
+
+async function doSweepFollowupSpans(waitDays: number): Promise<void> {
   const db = await getDb();
   const qualifying = new Set((await loadReqFollowUp(waitDays)).map((r) => r.id));
   const events = await db.select<{ refill_id: number; kind: string }[]>(

@@ -277,26 +277,32 @@ export function useRefillCellEdit(lookups: Lookups, onMutated: () => void) {
 }
 
 /**
- * Due-date-first sorting, shared by both grids: tracks whether the grid is in
- * due-date order (day separators draw only then — story 1.1), enforces the
- * date-order lock (story 1.8: due date stays the primary key, other columns
- * sort within each day) and provides Reset sort. An unsorted grid displays
- * query order, which is due-date order.
+ * Due-date-first sorting, shared by the refill grids: tracks whether the grid
+ * is in due-date order (day separators draw only then — story 1.1), enforces
+ * the date-order lock (story 1.8: due date stays the primary key, other
+ * columns sort within each day) and provides Reset sort. An unsorted grid
+ * displays query order — due-date order on the Month and Overdue tabs, but
+ * NOT on Req Follow Up (days-quiet order), which passes
+ * `unsortedIsDateOrder: false` so separators only draw under an explicit
+ * due-date sort there.
  */
-export function useDueDateSort(apiRef: { current: GridApi<RefillRow> | null }) {
+export function useDueDateSort(
+  apiRef: { current: GridApi<RefillRow> | null },
+  { unsortedIsDateOrder = true }: { unsortedIsDateOrder?: boolean } = {},
+) {
   const [locked, setLocked] = useState(false);
   const lockedRef = useRef(false);
   const lockedDirRef = useRef<"asc" | "desc">("asc");
   const applyingSortRef = useRef(false);
-  const dateOrderRef = useRef(true);
+  const dateOrderRef = useRef(unsortedIsDateOrder);
 
   const recomputeDateOrder = useCallback((api: GridApi<RefillRow>) => {
     const sorted = api
       .getColumnState()
       .filter((s) => s.sort)
       .sort((a, b) => (a.sortIndex ?? 0) - (b.sortIndex ?? 0));
-    dateOrderRef.current = sorted.length === 0 || sorted[0].colId === "due_date";
-  }, []);
+    dateOrderRef.current = sorted.length === 0 ? unsortedIsDateOrder : sorted[0].colId === "due_date";
+  }, [unsortedIsDateOrder]);
 
   const enforceLock = useCallback((api: GridApi<RefillRow>) => {
     const sorted = api
