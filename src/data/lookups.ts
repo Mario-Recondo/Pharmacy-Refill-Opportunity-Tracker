@@ -20,6 +20,7 @@ function parseSettings(rows: { key: string; value: string }[]): AppSettings {
     copayTiers: JSON.parse(map.get("copay_tiers") ?? "[]"),
     statusColors: JSON.parse(map.get("status_colors") ?? "{}"),
     nimbleLinkAlertDays: Number(map.get("nimble_link_alert_days") ?? 5),
+    followupWaitDays: Number(map.get("followup_wait_days") ?? 5),
     backupFolder: map.get("backup_folder") ?? null,
   };
 }
@@ -34,7 +35,7 @@ export async function loadLookups(): Promise<Lookups> {
       ),
       loadTable("secondary_coverages", ", logo"),
       loadTable("refill_notes", ", color, meaning, allows_call_note, shows_age_counter"),
-      loadTable("call_notes", ", color, meaning"),
+      loadTable("call_notes", ", color, meaning, requires_followup"),
       db.select<{ key: string; value: string }[]>("SELECT key, value FROM settings"),
     ]);
   return { insurances, insuranceGroups, secondaryCoverages, refillNotes, callNotes, settings: parseSettings(settingRows) };

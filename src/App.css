@@ -126,9 +126,10 @@ body {
   display: none;
 }
 
-/* ---- overdue tab (story 1.7) ---- */
+/* ---- overdue tab (story 1.7) + req follow up tab ---- */
 
-.overdue-view {
+.overdue-view,
+.followup-view {
   flex: 1;
   min-height: 0;
   display: flex;
@@ -881,16 +882,38 @@ body {
 
 /* history (story 2.3) */
 
-.history {
+.history,
+.activity {
   margin-top: 18px;
   border-top: 1px solid #e2e2e2;
   padding-top: 10px;
 }
 
-.history h3 {
+.history h3,
+.activity h3 {
   margin: 0 0 8px;
   font-size: 13px;
   color: #555;
+}
+
+/* drawer event-log list (read-only) */
+.activity-row {
+  display: flex;
+  gap: 10px;
+  align-items: baseline;
+  padding: 3px 0;
+  font-size: 12px;
+}
+
+.activity-date {
+  flex: none;
+  width: 88px;
+  color: #98a2b1;
+  font-variant-numeric: tabular-nums;
+}
+
+.activity-label {
+  color: #444;
 }
 
 .history-empty {

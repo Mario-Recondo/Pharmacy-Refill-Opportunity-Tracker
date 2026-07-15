@@ -243,6 +243,7 @@ export function useRefillCellEdit(lookups: Lookups, onMutated: () => void) {
       const persist = async (f: EditableField, v: unknown) => {
         const res = await updateRefillField(row.id, f, v ?? null);
         if (res.refill_note_set_at !== undefined) row.refill_note_set_at = res.refill_note_set_at;
+        if (res.call_note_set_at !== undefined) row.call_note_set_at = res.call_note_set_at;
       };
       try {
         // call-note gating: never silently wipe a call note (story 1.5)

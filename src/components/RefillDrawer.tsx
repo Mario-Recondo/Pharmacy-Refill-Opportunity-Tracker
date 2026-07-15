@@ -4,13 +4,23 @@ import {
   findOrCreateDrug,
   findRefillByRxDue,
   loadDrugs,
+  loadRefillEvents,
   loadRxDrug,
   loadRxHistory,
   updateRefillCore,
   updateRefillField,
   updateRxDrug,
 } from "../data/refills";
-import { STATUSES, type Drug, type EditableField, type Lookup, type Lookups, type RefillRow, type RefillStatus } from "../data/types";
+import {
+  STATUSES,
+  type Drug,
+  type EditableField,
+  type Lookup,
+  type Lookups,
+  type RefillEvent,
+  type RefillRow,
+  type RefillStatus,
+} from "../data/types";
 import { copayColor, formatMoney, profitStyle, textColorFor } from "../lib/colors";
 import { confirmDestructive } from "../lib/confirmDialog";
 import { insuranceDisplayName, noteQualifiesForCallNote } from "../lib/rules";
@@ -41,6 +51,28 @@ function longDate(iso: string): string {
 
 function daysApart(a: string, b: string): number {
   return Math.round(Math.abs(new Date(a).getTime() - new Date(b).getTime()) / 86_400_000);
+}
+
+/** Event timestamps are UTC ISO; shown as the local calendar date. */
+function eventDate(atIso: string): string {
+  return new Date(atIso).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
+}
+
+function eventLabel(e: RefillEvent): string {
+  const arrow = (o: string | null, n: string | null) =>
+    o == null ? `set to ${n}` : n == null ? `cleared (was ${o})` : `${o} → ${n}`;
+  switch (e.kind) {
+    case "refill_note":
+      return `Refill note ${arrow(e.old_value, e.new_value)}`;
+    case "call_note":
+      return `Call note ${arrow(e.old_value, e.new_value)}`;
+    case "status":
+      return `Status ${arrow(e.old_value, e.new_value)}${e.profit != null ? ` (${formatMoney(e.profit)})` : ""}`;
+    case "followup_entered":
+      return "Entered Req Follow Up";
+    case "followup_left":
+      return "Left Req Follow Up";
+  }
 }
 
 /**
@@ -309,6 +341,8 @@ export default function RefillDrawer({ mode, lookups, profitMax, onClose, onRowE
   // create-mode probable duplicate: the Rx already has a row due within NEAR_DUP_DAYS (same cycle, drifted date)
   const [nearDup, setNearDup] = useState<{ id: number; due_date: string; status: string; days: number } | null>(null);
   const [saving, setSaving] = useState(false);
+  // bumped after each persisted edit so the Activity section re-reads the event log
+  const [activitySeq, setActivitySeq] = useState(0);
   const dueInputRef = useRef<HTMLInputElement>(null);
   const rxInputRef = useRef<HTMLInputElement>(null);
 
@@ -329,11 +363,14 @@ export default function RefillDrawer({ mode, lookups, profitMax, onClose, onRowE
           return false;
         }
         row.call_note_id = null;
+        row.call_note_set_at = null;
         await updateRefillField(row.id, "call_note_id", null);
       }
       const res = await updateRefillField(row.id, field, value ?? null);
       (row as unknown as Record<string, unknown>)[field] = value ?? null;
       if (res.refill_note_set_at !== undefined) row.refill_note_set_at = res.refill_note_set_at;
+      if (res.call_note_set_at !== undefined) row.call_note_set_at = res.call_note_set_at;
+      setActivitySeq((s) => s + 1);
       onRowEdited(row, false);
       return true;
     } catch (err) {
@@ -498,6 +535,22 @@ export default function RefillDrawer({ mode, lookups, profitMax, onClose, onRowE
       stale = true;
     };
   }, [editRow?.id, editRow?.rx_number]);
+
+  // ----- activity (event log: note/status changes + follow-up spans) ---------
+
+  const [activity, setActivity] = useState<RefillEvent[] | null>(null);
+  useEffect(() => {
+    if (!editRow) return;
+    let stale = false;
+    loadRefillEvents(editRow.id)
+      .then((events) => {
+        if (!stale) setActivity(events);
+      })
+      .catch(console.error);
+    return () => {
+      stale = true;
+    };
+  }, [editRow?.id, activitySeq]);
 
   // ----- notes hover popup (story 2.2) ---------------------------------------
 
@@ -840,6 +893,22 @@ export default function RefillDrawer({ mode, lookups, profitMax, onClose, onRowE
                 </button>
               );
             })}
+          </section>
+        )}
+
+        {editRow && (
+          <section className="activity">
+            <h3>Activity</h3>
+            {activity === null && <div className="history-empty">Loading…</div>}
+            {activity?.length === 0 && (
+              <div className="history-empty">No workflow changes recorded yet for this row.</div>
+            )}
+            {activity?.map((e) => (
+              <div key={e.id} className="activity-row">
+                <span className="activity-date">{eventDate(e.at)}</span>
+                <span className="activity-label">{eventLabel(e)}</span>
+              </div>
+            ))}
           </section>
         )}
       </div>
