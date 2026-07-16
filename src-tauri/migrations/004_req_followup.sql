@@ -15,7 +15,10 @@ ALTER TABLE refills ADD COLUMN call_note_set_at TEXT;
 
 -- Backfill: stamp existing call notes with the migration date, not the due
 -- date — nothing qualifies on day one, the clock starts fresh for everyone.
-UPDATE refills SET call_note_set_at = datetime('now') WHERE call_note_id IS NOT NULL;
+-- ISO-8601 UTC ("...T...Z"), matching the app's toISOString() writes: mixing
+-- SQLite's space-separated datetime('now') format in the same column breaks
+-- text ordering and gets parsed as LOCAL time by JS (SQL review 2026-07-15, L3).
+UPDATE refills SET call_note_set_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now') WHERE call_note_id IS NOT NULL;
 
 -- Append-only event log: workflow changes only (refill note, call note,
 -- status), plus followup_entered/followup_left span events written by the
@@ -27,7 +30,9 @@ UPDATE refills SET call_note_set_at = datetime('now') WHERE call_note_id IS NOT 
 CREATE TABLE refill_events (
   id        INTEGER PRIMARY KEY AUTOINCREMENT,
   refill_id INTEGER NOT NULL,
-  at        TEXT NOT NULL DEFAULT (datetime('now')),
+  -- app writes always pass `at` explicitly (JS ISO); the default matches that
+  -- format so a manual/SQL insert can never mix formats into the column
+  at        TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
   kind      TEXT NOT NULL CHECK (kind IN ('refill_note', 'call_note', 'status', 'followup_entered', 'followup_left')),
   old_value TEXT,
   new_value TEXT,

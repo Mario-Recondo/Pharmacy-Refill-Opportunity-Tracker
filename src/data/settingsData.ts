@@ -5,7 +5,7 @@
 import Database from "@tauri-apps/plugin-sql";
 import { invoke } from "@tauri-apps/api/core";
 import { appConfigDir, join } from "@tauri-apps/api/path";
-import { getDb } from "../db";
+import { getDb, resetDb } from "../db";
 import type { CopayTier, Lookup } from "./types";
 
 export type LookupTable = "insurances" | "secondary_coverages" | "refill_notes" | "call_notes";
@@ -200,6 +200,10 @@ export async function restoreDatabase(backupFile: string, safetyFolder: string):
   await vacuumInto(safetyFolder, `pre-restore-${timestamp()}.db`);
   const db = await getDb();
   await db.close();
+  // the handle above is dead either way — drop it from the cache so a failed
+  // swap (copy error, permissions) doesn't wedge every later query on a
+  // closed connection; the next getDb() reloads whichever file is on disk
+  resetDb();
   await invoke("replace_database_and_restart", { source: backupFile });
 }
 

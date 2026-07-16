@@ -370,16 +370,23 @@ export async function loadDrugs(): Promise<Drug[]> {
   return db.select<Drug[]>("SELECT id, name, ndc FROM drugs ORDER BY name");
 }
 
-/** Link the named drug, creating it if unknown (NDC optional — compounds have none). */
+/**
+ * Link the named drug, creating it if unknown (NDC optional — compounds have
+ * none). Atomic get-or-create: ON CONFLICT makes a lost race against a
+ * concurrent creator (v2 bulk import) harmless, and the re-read returns the
+ * winner's id either way. (UNIQUE treats NULL NDCs as distinct, so the SELECT
+ * fast path stays the real guard for compounds.)
+ */
 export async function findOrCreateDrug(name: string, ndc: string | null): Promise<number> {
   const db = await getDb();
-  const existing = await db.select<{ id: number }[]>(
-    "SELECT id FROM drugs WHERE name = $1 AND ndc IS $2",
-    [name, ndc],
-  );
+  const find = () =>
+    db.select<{ id: number }[]>("SELECT id FROM drugs WHERE name = $1 AND ndc IS $2", [name, ndc]);
+  const existing = await find();
   if (existing[0]) return existing[0].id;
-  const res = await db.execute("INSERT INTO drugs (name, ndc) VALUES ($1, $2)", [name, ndc]);
-  return res.lastInsertId as number;
+  await db.execute("INSERT INTO drugs (name, ndc) VALUES ($1, $2) ON CONFLICT (name, ndc) DO NOTHING", [name, ndc]);
+  const created = await find();
+  if (!created[0]) throw new Error(`Could not create drug "${name}"`);
+  return created[0].id;
 }
 
 /** Permanent removal — callers must confirm with the user first (destructive action, design rule). */
