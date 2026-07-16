@@ -1,4 +1,4 @@
-import { getDb } from "../db";
+import { executeAtomicBatch, getDb, serializeWrite, type SqlStatement } from "../db";
 import {
   EDITABLE_FIELDS,
   type Drug,
@@ -148,17 +148,13 @@ export async function loadRefillEvents(refillId: number): Promise<RefillEvent[]>
  * after any data change, and on day rollover. Spans of since-deleted rows
  * close here too (they stop qualifying).
  *
- * Sweeps are serialized: two overlapping runs would both read the open-span
- * set before either writes and double-insert span events (seen live under
- * StrictMode's doubled launch effect; any two rapid mutations could race the
- * same way).
+ * Sweeps run on the global write chain: two overlapping runs would both read
+ * the open-span set before either writes and double-insert span events (seen
+ * live under StrictMode's doubled launch effect; any two rapid mutations
+ * could race the same way — now impossible for every write, SQL review M2).
  */
-let sweepChain: Promise<void> = Promise.resolve();
-
 export function sweepFollowupSpans(waitDays: number): Promise<void> {
-  const run = sweepChain.then(() => doSweepFollowupSpans(waitDays));
-  sweepChain = run.catch(() => {}); // a failed sweep must not wedge the chain
-  return run;
+  return serializeWrite(() => doSweepFollowupSpans(waitDays));
 }
 
 async function doSweepFollowupSpans(waitDays: number): Promise<void> {
@@ -173,16 +169,24 @@ async function doSweepFollowupSpans(waitDays: number): Promise<void> {
     else open.delete(e.refill_id);
   }
   const now = new Date().toISOString();
+  const writes: SqlStatement[] = [];
   for (const id of qualifying) {
     if (!open.has(id)) {
-      await db.execute("INSERT INTO refill_events (refill_id, at, kind) VALUES ($1, $2, 'followup_entered')", [id, now]);
+      writes.push({
+        sql: "INSERT INTO refill_events (refill_id, at, kind) VALUES ($1, $2, 'followup_entered')",
+        params: [id, now],
+      });
     }
   }
   for (const id of open) {
     if (!qualifying.has(id)) {
-      await db.execute("INSERT INTO refill_events (refill_id, at, kind) VALUES ($1, $2, 'followup_left')", [id, now]);
+      writes.push({
+        sql: "INSERT INTO refill_events (refill_id, at, kind) VALUES ($1, $2, 'followup_left')",
+        params: [id, now],
+      });
     }
   }
+  await executeAtomicBatch(writes);
 }
 
 /** Rows per month ("2026-07" → count), for the month picker's data-presence indicators. */
@@ -214,15 +218,22 @@ async function noteName(db: Db, table: "refill_notes" | "call_notes", id: number
  */
 const EVENT_SETTLE_MS = 2 * 60_000;
 
-async function logWorkflowEvent(
+/**
+ * Decide the event-log write for an edit (merge / cancel / append) and return
+ * it as a statement instead of executing, so the caller can commit it and the
+ * row update as one atomic batch (SQL review M1). The read-then-decide is safe
+ * outside the transaction because all writes are serialized (M2): nothing can
+ * touch refill_events between this read and the batch that follows.
+ */
+async function workflowEventStatement(
   db: Db,
   refillId: number,
   kind: RefillEventKind,
   oldValue: string | null,
   newValue: string | null,
   profit: number | null,
-): Promise<void> {
-  if (oldValue === newValue) return;
+): Promise<SqlStatement | null> {
+  if (oldValue === newValue) return null;
   const now = new Date();
   const windowStart = new Date(now.getTime() - EVENT_SETTLE_MS).toISOString();
   const recent = await db.select<{ id: number; old_value: string | null }[]>(
@@ -234,18 +245,17 @@ async function logWorkflowEvent(
   if (recent[0]) {
     if (recent[0].old_value === newValue) {
       // back where it was before the correction started — the pair cancels out
-      await db.execute("DELETE FROM refill_events WHERE id = $1", [recent[0].id]);
-    } else {
-      await db.execute("UPDATE refill_events SET new_value = $1, at = $2, profit = $3 WHERE id = $4", [
-        newValue, now.toISOString(), profit, recent[0].id,
-      ]);
+      return { sql: "DELETE FROM refill_events WHERE id = $1", params: [recent[0].id] };
     }
-    return;
+    return {
+      sql: "UPDATE refill_events SET new_value = $1, at = $2, profit = $3 WHERE id = $4",
+      params: [newValue, now.toISOString(), profit, recent[0].id],
+    };
   }
-  await db.execute(
-    "INSERT INTO refill_events (refill_id, at, kind, old_value, new_value, profit) VALUES ($1, $2, $3, $4, $5, $6)",
-    [refillId, now.toISOString(), kind, oldValue, newValue, profit],
-  );
+  return {
+    sql: "INSERT INTO refill_events (refill_id, at, kind, old_value, new_value, profit) VALUES ($1, $2, $3, $4, $5, $6)",
+    params: [refillId, now.toISOString(), kind, oldValue, newValue, profit],
+  };
 }
 
 /**
@@ -255,9 +265,19 @@ async function logWorkflowEvent(
  * clock). New stamps are returned so callers keep in-memory rows in sync
  * without a reload. Refill-note, call-note and status changes also append to
  * the event log; a status change to Checked Out snapshots new_profit onto the
- * event ("profit made in <month>" analytics).
+ * event ("profit made in <month>" analytics). The row update and its event-log
+ * write commit as ONE transaction: a failure persists neither, so the UI's
+ * revert-on-reject matches what the database did (SQL review M1).
  */
-export async function updateRefillField(
+export function updateRefillField(
+  id: number,
+  field: EditableField,
+  value: unknown,
+): Promise<{ refill_note_set_at?: string | null; call_note_set_at?: string | null }> {
+  return serializeWrite(() => doUpdateRefillField(id, field, value));
+}
+
+async function doUpdateRefillField(
   id: number,
   field: EditableField,
   value: unknown,
@@ -275,39 +295,48 @@ export async function updateRefillField(
 
     if (field === "refill_note_id") {
       const setAt = value == null ? null : new Date().toISOString();
-      await db.execute(
-        "UPDATE refills SET refill_note_id = $1, refill_note_set_at = $2, updated_at = datetime('now') WHERE id = $3",
-        [value, setAt, id],
-      );
+      const writes: SqlStatement[] = [{
+        sql: "UPDATE refills SET refill_note_id = $1, refill_note_set_at = $2, updated_at = datetime('now') WHERE id = $3",
+        params: [value, setAt, id],
+      }];
       if (before) {
         const oldName = await noteName(db, "refill_notes", before.refill_note_id);
         const newName = await noteName(db, "refill_notes", (value as number | null) ?? null);
-        await logWorkflowEvent(db, id, "refill_note", oldName, newName, null);
+        const event = await workflowEventStatement(db, id, "refill_note", oldName, newName, null);
+        if (event) writes.push(event);
       }
+      await executeAtomicBatch(writes);
       return { refill_note_set_at: setAt };
     }
 
     if (field === "call_note_id") {
       const setAt = value == null ? null : new Date().toISOString();
-      await db.execute(
-        "UPDATE refills SET call_note_id = $1, call_note_set_at = $2, updated_at = datetime('now') WHERE id = $3",
-        [value, setAt, id],
-      );
+      const writes: SqlStatement[] = [{
+        sql: "UPDATE refills SET call_note_id = $1, call_note_set_at = $2, updated_at = datetime('now') WHERE id = $3",
+        params: [value, setAt, id],
+      }];
       if (before) {
         const oldName = await noteName(db, "call_notes", before.call_note_id);
         const newName = await noteName(db, "call_notes", (value as number | null) ?? null);
-        await logWorkflowEvent(db, id, "call_note", oldName, newName, null);
+        const event = await workflowEventStatement(db, id, "call_note", oldName, newName, null);
+        if (event) writes.push(event);
       }
+      await executeAtomicBatch(writes);
       return { call_note_set_at: setAt };
     }
 
     // status
-    await db.execute("UPDATE refills SET status = $1, updated_at = datetime('now') WHERE id = $2", [value, id]);
+    const writes: SqlStatement[] = [{
+      sql: "UPDATE refills SET status = $1, updated_at = datetime('now') WHERE id = $2",
+      params: [value, id],
+    }];
     if (before) {
       const newStatus = value as RefillStatus;
       const profit = newStatus === "Checked Out" ? before.new_profit : null;
-      await logWorkflowEvent(db, id, "status", before.status, newStatus, profit);
+      const event = await workflowEventStatement(db, id, "status", before.status, newStatus, profit);
+      if (event) writes.push(event);
     }
+    await executeAtomicBatch(writes);
     return {};
   }
 
@@ -320,18 +349,20 @@ export async function updateRefillField(
  * Callers must run the (rx_number, due_date) duplicate check first; the unique
  * index rejects violations regardless.
  */
-export async function updateRefillCore(
+export function updateRefillCore(
   id: number,
   changes: Partial<Pick<RefillRow, "rx_number" | "due_date" | "drug_id">>,
 ): Promise<void> {
   const fields = Object.keys(changes) as (keyof typeof changes)[];
-  if (fields.length === 0) return;
-  const db = await getDb();
-  const sets = fields.map((f, i) => `${f} = $${i + 1}`).join(", ");
-  await db.execute(
-    `UPDATE refills SET ${sets}, updated_at = datetime('now') WHERE id = $${fields.length + 1}`,
-    [...fields.map((f) => changes[f]), id],
-  );
+  if (fields.length === 0) return Promise.resolve();
+  return serializeWrite(async () => {
+    const db = await getDb();
+    const sets = fields.map((f, i) => `${f} = $${i + 1}`).join(", ");
+    await db.execute(
+      `UPDATE refills SET ${sets}, updated_at = datetime('now') WHERE id = $${fields.length + 1}`,
+      [...fields.map((f) => changes[f]), id],
+    );
+  });
 }
 
 /** The medication an Rx number already refers to, if any rows exist (one Rx # = one medication, design doc §5). */
@@ -346,12 +377,14 @@ export async function loadRxDrug(rxNumber: string): Promise<{ drug_id: number; d
 }
 
 /** Correct the medication on every row of an Rx number, keeping the one-Rx-one-drug invariant. */
-export async function updateRxDrug(rxNumber: string, drugId: number): Promise<void> {
-  const db = await getDb();
-  await db.execute("UPDATE refills SET drug_id = $1, updated_at = datetime('now') WHERE rx_number = $2", [
-    drugId,
-    rxNumber,
-  ]);
+export function updateRxDrug(rxNumber: string, drugId: number): Promise<void> {
+  return serializeWrite(async () => {
+    const db = await getDb();
+    await db.execute("UPDATE refills SET drug_id = $1, updated_at = datetime('now') WHERE rx_number = $2", [
+      drugId,
+      rxNumber,
+    ]);
+  });
 }
 
 /** The existing row occupying an (rx_number, due_date) slot, if any — duplicate protection (story 2.1). */
@@ -374,25 +407,30 @@ export async function loadDrugs(): Promise<Drug[]> {
  * Link the named drug, creating it if unknown (NDC optional — compounds have
  * none). Atomic get-or-create: ON CONFLICT makes a lost race against a
  * concurrent creator (v2 bulk import) harmless, and the re-read returns the
- * winner's id either way. (UNIQUE treats NULL NDCs as distinct, so the SELECT
- * fast path stays the real guard for compounds.)
+ * winner's id either way. The bare ON CONFLICT covers both unique indexes —
+ * UNIQUE (name, ndc) and the migration-005 partial index that guards NULL-NDC
+ * compounds (UNIQUE treats NULLs as distinct, so (name, ndc) alone missed them).
  */
-export async function findOrCreateDrug(name: string, ndc: string | null): Promise<number> {
-  const db = await getDb();
-  const find = () =>
-    db.select<{ id: number }[]>("SELECT id FROM drugs WHERE name = $1 AND ndc IS $2", [name, ndc]);
-  const existing = await find();
-  if (existing[0]) return existing[0].id;
-  await db.execute("INSERT INTO drugs (name, ndc) VALUES ($1, $2) ON CONFLICT (name, ndc) DO NOTHING", [name, ndc]);
-  const created = await find();
-  if (!created[0]) throw new Error(`Could not create drug "${name}"`);
-  return created[0].id;
+export function findOrCreateDrug(name: string, ndc: string | null): Promise<number> {
+  return serializeWrite(async () => {
+    const db = await getDb();
+    const find = () =>
+      db.select<{ id: number }[]>("SELECT id FROM drugs WHERE name = $1 AND ndc IS $2", [name, ndc]);
+    const existing = await find();
+    if (existing[0]) return existing[0].id;
+    await db.execute("INSERT INTO drugs (name, ndc) VALUES ($1, $2) ON CONFLICT DO NOTHING", [name, ndc]);
+    const created = await find();
+    if (!created[0]) throw new Error(`Could not create drug "${name}"`);
+    return created[0].id;
+  });
 }
 
 /** Permanent removal — callers must confirm with the user first (destructive action, design rule). */
-export async function deleteRefill(id: number): Promise<void> {
-  const db = await getDb();
-  await db.execute("DELETE FROM refills WHERE id = $1", [id]);
+export function deleteRefill(id: number): Promise<void> {
+  return serializeWrite(async () => {
+    const db = await getDb();
+    await db.execute("DELETE FROM refills WHERE id = $1", [id]);
+  });
 }
 
 export interface NewRefill {
@@ -413,7 +451,11 @@ export interface NewRefill {
 }
 
 /** Manual add (flow 4): source = 'manual'; set notes are stamped now (aging counter / quiet-days clock). */
-export async function createRefill(input: NewRefill): Promise<number> {
+export function createRefill(input: NewRefill): Promise<number> {
+  return serializeWrite(() => doCreateRefill(input));
+}
+
+async function doCreateRefill(input: NewRefill): Promise<number> {
   const db = await getDb();
   const nowIso = new Date().toISOString();
   const refillNoteSetAt = input.refill_note_id != null ? nowIso : null;
