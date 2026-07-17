@@ -4,7 +4,7 @@
 // real migrations; the quiet clock is JS-side, so tests pin the system time.
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { loadReqFollowUp, loadReqFollowUpCount } from "../src/data/refills";
-import { daysAgoIso, freshDb, seedRefill, unflaggedCallNoteId } from "./helpers/fakeTauri";
+import { daysAgoIso, freshDb, rawDb, seedRefill, unflaggedCallNoteId } from "./helpers/fakeTauri";
 
 const WAIT = 5;
 
@@ -54,8 +54,18 @@ describe("loadReqFollowUp", () => {
     expect(await loadReqFollowUp(WAIT)).toEqual([]);
   });
 
-  it("keys off the requires_followup FLAG, not the note name; no call note = no membership", async () => {
-    qualifying({ call_note: undefined, call_note_id: unflaggedCallNoteId() });
+  it("keys off the requires_followup FLAG, not the note name — renames don't change membership", async () => {
+    // a flagged note renamed to something that sounds resolved still qualifies…
+    const stillIn = qualifying();
+    rawDb().prepare("UPDATE call_notes SET name = 'Paid in full' WHERE name = 'LVM+RSL'").run();
+    // …and an unflagged note renamed to LOOK like a follow-up note still doesn't
+    const unflagged = unflaggedCallNoteId();
+    rawDb().prepare("UPDATE call_notes SET name = 'CALL BACK+RSL' WHERE id = $1").run({ $1: unflagged });
+    qualifying({ call_note: undefined, call_note_id: unflagged });
+    expect((await loadReqFollowUp(WAIT)).map((r) => r.id)).toEqual([stillIn]);
+  });
+
+  it("no call note at all = no membership", async () => {
     qualifying({ call_note: undefined, call_note_set_at: undefined });
     expect(await loadReqFollowUp(WAIT)).toEqual([]);
   });

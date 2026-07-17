@@ -58,12 +58,13 @@ describe("loadOverduePendingCount (tab badge)", () => {
     expect(await loadOverduePendingCount(TODAY)).toBe(2);
   });
 
-  it("agrees with loadOverdue's Pending arm", async () => {
-    seedRefill({ due: "2026-07-01" });
-    seedRefill({ due: "2026-07-02", new_profit: 30 });
-    seedRefill({ due: "2026-07-03", status: "MISSED" });
-    const rows = await loadOverdue(TODAY);
-    const pending = rows.filter((r) => r.status === "Pending");
-    expect(await loadOverduePendingCount(TODAY)).toBe(pending.length);
+  it("badge and tab agree on the independently-known count — not just on each other", async () => {
+    seedRefill({ due: "2026-07-01" }); // unprocessed → counts
+    seedRefill({ due: "2026-07-02", new_profit: 30 }); // half-processed → counts
+    seedRefill({ due: "2026-07-03", status: "MISSED" }); // permanent record → uncounted
+    // both asserted against the fixture-derived constant, so a shared drift
+    // in the two queries can't hide behind their consistency
+    expect(await loadOverduePendingCount(TODAY)).toBe(2);
+    expect((await loadOverdue(TODAY)).filter((r) => r.status === "Pending")).toHaveLength(2);
   });
 });

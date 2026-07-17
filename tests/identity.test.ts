@@ -3,7 +3,16 @@
 // migration-005 partial index guarding NULL-NDC compounds), and events
 // surviving row deletion.
 import { beforeEach, describe, expect, it } from "vitest";
-import { createRefill, deleteRefill, findOrCreateDrug, findRefillByRxDue, type NewRefill } from "../src/data/refills";
+import {
+  createRefill,
+  deleteRefill,
+  findOrCreateDrug,
+  findRefillByRxDue,
+  loadRxDrug,
+  updateRefillCore,
+  updateRxDrug,
+  type NewRefill,
+} from "../src/data/refills";
 import { eventsFor, freshDb, rawDb, seedRefill } from "./helpers/fakeTauri";
 
 const blank: Omit<NewRefill, "rx_number" | "due_date" | "drug_id"> = {
@@ -29,10 +38,12 @@ describe("findOrCreateDrug", () => {
   });
 
   it("adopts a row another writer already inserted instead of failing", async () => {
-    rawDb().prepare("INSERT INTO drugs (name, ndc) VALUES ('Eliquis 5mg', '00003089421')").run();
+    const seeded = Number(
+      rawDb().prepare("INSERT INTO drugs (name, ndc) VALUES ('Eliquis 5mg', '00003089421')").run().lastInsertRowid,
+    );
     const id = await findOrCreateDrug("Eliquis 5mg", "00003089421");
     const n = rawDb().prepare("SELECT COUNT(*) AS n FROM drugs WHERE name = 'Eliquis 5mg'").get() as { n: number };
-    expect(id).toBeGreaterThan(0);
+    expect(id).toBe(seeded); // the winner's id, not some other positive number
     expect(n.n).toBe(1);
   });
 
@@ -67,6 +78,47 @@ describe("(rx_number, due_date) natural key", () => {
     await expect(
       createRefill({ ...blank, rx_number: "700123", due_date: "2026-08-19", drug_id: drugId }),
     ).resolves.toBeGreaterThan(0);
+  });
+});
+
+describe("drawer identity edits (one Rx # = one medication, §5)", () => {
+  beforeEach(freshDb);
+
+  it("updateRefillCore rejects moving a row into an occupied (rx, due) slot — and changes nothing", async () => {
+    seedRefill({ rx: "700123", due: "2026-07-20" });
+    const mover = seedRefill({ rx: "700123", due: "2026-08-19" });
+    await expect(updateRefillCore(mover, { due_date: "2026-07-20" })).rejects.toThrow();
+    const row = rawDb().prepare("SELECT due_date FROM refills WHERE id = $1").get({ $1: mover }) as { due_date: string };
+    expect(row.due_date).toBe("2026-08-19");
+  });
+
+  it("updateRefillCore persists a legal identity change", async () => {
+    const id = seedRefill({ rx: "700123", due: "2026-07-20" });
+    await updateRefillCore(id, { rx_number: "700456", due_date: "2026-07-22" });
+    const row = rawDb().prepare("SELECT rx_number, due_date FROM refills WHERE id = $1").get({ $1: id });
+    expect(row).toMatchObject({ rx_number: "700456", due_date: "2026-07-22" });
+  });
+
+  it("loadRxDrug reports the medication of the NEWEST fill of the Rx", async () => {
+    // two drugs under one Rx violates the app-level invariant; seeded raw here
+    // precisely to pin which row the query trusts — the latest one
+    seedRefill({ rx: "700123", due: "2026-06-20", drug: "Old Name 10mg" });
+    seedRefill({ rx: "700123", due: "2026-07-20", drug: "New Name 10mg" });
+    expect((await loadRxDrug("700123"))?.drug_name).toBe("New Name 10mg");
+    expect(await loadRxDrug("700999")).toBeNull();
+  });
+
+  it("updateRxDrug repoints EVERY row of the Rx and touches no other Rx", async () => {
+    const a = seedRefill({ rx: "700123", due: "2026-06-20", drug: "Wrong 10mg" });
+    const b = seedRefill({ rx: "700123", due: "2026-07-20", drug: "Wrong 10mg" });
+    const other = seedRefill({ rx: "700999", due: "2026-07-20", drug: "Wrong 10mg" });
+    const right = await findOrCreateDrug("Right 10mg", null);
+    await updateRxDrug("700123", right);
+    const drugOf = (id: number) =>
+      (rawDb().prepare("SELECT drug_id FROM refills WHERE id = $1").get({ $1: id }) as { drug_id: number }).drug_id;
+    expect(drugOf(a)).toBe(right);
+    expect(drugOf(b)).toBe(right);
+    expect(drugOf(other)).not.toBe(right);
   });
 });
 
