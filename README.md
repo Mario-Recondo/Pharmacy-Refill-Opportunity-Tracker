@@ -65,11 +65,38 @@ pnpm tauri build
 - Portable exe: `src-tauri\target\release\refill-tracker.exe`
 - Installers (MSI/NSIS): `src-tauri\target\release\bundle\`
 
+## Running the tests
+
+From the repo root:
+
+```powershell
+pnpm test
+```
+
+Runs the whole suite once — about half a second, roughly 70 tests. No app, no
+dev server, and no Rust build needed: the tests run the data layer's real SQL
+against an **in-memory SQLite** built from the actual migration files in
+`src-tauri/migrations/`, so your development database is never touched. The
+`ExperimentalWarning: SQLite` lines Node prints are harmless (its built-in
+driver is newish).
+
+Useful variations:
+
+```powershell
+pnpm vitest                      # watch mode — reruns as you edit files
+pnpm test tests/overdue.test.ts  # a single test file
+pnpm vitest -t "settling"        # only tests whose name matches, in watch mode
+```
+
+The suite covers the business rules (tab membership, the event settling window,
+the follow-up sweep, copay tiers, date math). UI rendering and native dialogs
+are deliberately not covered here — those are verified in the running app.
+
 ## Other useful commands
 
 | Command | What it does |
 | --- | --- |
-| `npx tsc --noEmit` | Typecheck the frontend |
+| `npx tsc --noEmit` | Typecheck the frontend and the tests |
 | `pnpm dev` | Vite dev server only (browser, no Tauri shell — rarely needed) |
 
 ## Repository map
