@@ -70,25 +70,34 @@ export function todayIso(): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 
-/** Overdue tab (story 1.7): Pending rows past their due date plus every MISSED row, all months, oldest first. */
+/**
+ * Overdue tab (story 1.7): Pending rows past their due date whose insurance hasn't
+ * been run yet (New Copay or New Profit still empty — user decision 2026-07-17),
+ * plus every MISSED row, all months, oldest first. Once both fields are filled the
+ * row is "processed" and leaves; from there it either surfaces on Req Follow Up or
+ * lives only in its month grid (deliberate gap — nothing to do in between).
+ */
 export async function loadOverdue(today: string): Promise<RefillRow[]> {
   const db = await getDb();
   return db.select<RefillRow[]>(
-    `${ROW_SELECT} WHERE (r.status = 'Pending' AND r.due_date < $1) OR r.status = 'MISSED'
+    `${ROW_SELECT} WHERE (r.status = 'Pending' AND r.due_date < $1
+       AND (r.new_copay IS NULL OR r.new_profit IS NULL)) OR r.status = 'MISSED'
      ORDER BY r.due_date, r.id`,
     [today],
   );
 }
 
 /**
- * Actionable overdue count for the tab badge — Pending past-due only. MISSED rows
- * stay in the tab forever as the permanent record, so counting them would grow the
- * badge unboundedly and bury the "work this now" signal.
+ * Actionable overdue count for the tab badge — unprocessed Pending past-due only
+ * (same rule as loadOverdue's Pending arm). MISSED rows stay in the tab forever as
+ * the permanent record, so counting them would grow the badge unboundedly and bury
+ * the "work this now" signal.
  */
 export async function loadOverduePendingCount(today: string): Promise<number> {
   const db = await getDb();
   const rows = await db.select<{ n: number }[]>(
-    "SELECT COUNT(*) AS n FROM refills WHERE status = 'Pending' AND due_date < $1",
+    `SELECT COUNT(*) AS n FROM refills WHERE status = 'Pending' AND due_date < $1
+       AND (new_copay IS NULL OR new_profit IS NULL)`,
     [today],
   );
   return rows[0]?.n ?? 0;

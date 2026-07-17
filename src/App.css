@@ -489,6 +489,12 @@ body {
   box-shadow: inset 0 0 0 2px var(--ink);
 }
 
+/* Overdue tab: MISSED rows are the permanent record, not work — dimmed via
+   opacity so business colors are muted but never recolored (user decision 2026-07-17) */
+.ag-row.overdue-missed {
+  opacity: 0.45;
+}
+
 .rx-copy {
   cursor: pointer;
   font-variant-numeric: tabular-nums;
