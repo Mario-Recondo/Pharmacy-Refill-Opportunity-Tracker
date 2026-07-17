@@ -14,8 +14,8 @@ function App() {
   const [lookups, setLookups] = useState<Lookups | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [tab, setTab] = useState<Tab>("month");
-  // badge = actionable count (Pending past due); MISSED rows are the permanent
-  // record and would grow the badge forever — see OverdueView
+  // badge = actionable count (Pending past due, insurance not yet run); MISSED
+  // rows are the permanent record and would grow the badge forever — see OverdueView
   const [overdueCount, setOverdueCount] = useState(0);
   // badge = rows currently qualifying for Req Follow Up — all of them actionable
   const [followupCount, setFollowupCount] = useState(0);

@@ -1,9 +1,12 @@
-// Overdue tab (story 1.7, flow 8): every Pending row past its due date plus
-// every MISSED row, across all months, oldest first. Pending rows leave when
-// resolved; MISSED rows stay forever — the tab doubles as the permanent record
-// of slipped refills. Full month-grid column set (user decision 2026-07-13)
-// plus a Days-over column and a pinned-right action placeholder; a filter over
-// the refills table, no schema impact.
+// Overdue tab (story 1.7, flow 8): Pending rows past their due date that are
+// still unprocessed — insurance not run yet, i.e. New Copay or New Profit empty
+// (narrowed 2026-07-17 now that Req Follow Up owns worked-and-waiting rows) —
+// plus every MISSED row, across all months, oldest first. Pending rows leave
+// the moment both fields are filled; MISSED rows stay forever, greyed and
+// uncounted — the tab doubles as the permanent record of slipped refills.
+// Full month-grid column set (user decision 2026-07-13) plus a Days-over
+// column and a pinned-right action placeholder; a filter over the refills
+// table, no schema impact.
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AgGridReact } from "ag-grid-react";
@@ -207,6 +210,9 @@ export default function OverdueView({ lookups, active, onOpenInMonth, onDataChan
       const classes: string[] = [];
       if (isDayBreak(params)) classes.push("day-break");
       if (params.data && params.data.id === drawerRowIdRef.current) classes.push("drawer-open");
+      // MISSED rows are the permanent record, not work — dimmed (opacity, never
+      // recolored: business color coding stays intact underneath)
+      if (params.data?.status === "MISSED") classes.push("overdue-missed");
       return classes.length ? classes : undefined;
     },
     [isDayBreak],
@@ -220,8 +226,8 @@ export default function OverdueView({ lookups, active, onOpenInMonth, onDataChan
     <div className="overdue-view">
       {pending.length > 0 && (
         <div className="overdue-banner">
-          ⚠ {pending.length} refill{pending.length === 1 ? "" : "s"} past due and unresolved (oldest:{" "}
-          {dueLabel(pending[0].due_date)}) — work them or mark MISSED
+          ⚠ {pending.length} refill{pending.length === 1 ? "" : "s"} past due and not yet processed (oldest:{" "}
+          {dueLabel(pending[0].due_date)}) — run their insurance or mark MISSED
         </div>
       )}
 
@@ -264,7 +270,7 @@ export default function OverdueView({ lookups, active, onOpenInMonth, onDataChan
           <span className="row-count">
             {filteredRows.length === rows.length ? `${rows.length} rows` : `${filteredRows.length} of ${rows.length} rows`}
             {" · "}
-            {pending.length} past due · {rows.length - pending.length} MISSED
+            {pending.length} to process · {rows.length - pending.length} MISSED
           </span>
           <label className="check">
             <input type="checkbox" checked={showSecondary} onChange={(e) => setShowSecondary(e.target.checked)} />
@@ -281,8 +287,9 @@ export default function OverdueView({ lookups, active, onOpenInMonth, onDataChan
         <div className="empty-month">
           <h2>Nothing overdue</h2>
           <p>
-            Pending refills whose due date passes appear here automatically, along with rows marked
-            MISSED — those stay listed as the permanent record of slipped refills.
+            Pending refills whose due date passes before their insurance is run (New Copay and New
+            Profit entered) appear here automatically, along with rows marked MISSED — those stay
+            listed, greyed, as the permanent record of slipped refills.
           </p>
         </div>
       ) : (
