@@ -22,7 +22,8 @@ Desktop tool (single-user, offline) for a pharmacy technician at an independent 
 - `pnpm tauri dev` — run the app (compiles Rust on first run; needs `~/.cargo/bin` on PATH)
 - `powershell -File scripts/dev-mcp.ps1` — run the app with the WebView2 CDP port (9223) open; the `app-webview` MCP in `.mcp.json` attaches to it so the agent can inspect/click/screenshot the live app. GUI launches die silently in sandboxed shells — launch unsandboxed
 - `pnpm tauri build` — release build; standalone exe at `src-tauri/target/release/`, installers under `bundle/`
-- `npx tsc --noEmit` — frontend typecheck
+- `npx tsc --noEmit` — frontend typecheck (covers `tests/` too)
+- `pnpm test` — vitest suite over the data layer's real SQL: an in-memory `node:sqlite` DB runs the actual `src-tauri/migrations/*.sql`, with the Tauri modules aliased to stubs (`tests/helpers/fakeTauri.ts`). Business rules (tab membership, event settling window, sweep, tiers) are the targets; UI rendering and the Rust `execute_batch` internals stay covered by live MCP verification instead
 
 ## Rules that shape everything
 
