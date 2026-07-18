@@ -2,8 +2,9 @@
 
 Desktop tool for a pharmacy technician at an independent pharmacy: tracks prescription
 refills, contact attempts, copays and net profits, and surfaces high-value refills
-coming due. Replaces a Google Sheets month-tab workflow. Single-user, fully offline,
-ships as one Windows executable.
+coming due. Replaces a Google Sheets month-tab workflow. Single-user, all pharmacy
+data stays local — the app's only network activity is checking for and downloading
+its own updates. Ships as one Windows executable.
 
 Built with **Tauri 2 + React + TypeScript + Vite**, data in **SQLite**, grid on
 **AG Grid Community**. The full spec lives in [`Design_docs/refill-tracker-design.md`](Design_docs/refill-tracker-design.md)
@@ -72,6 +73,19 @@ The build produces three artifacts:
 - **NSIS installer** (ship this — see below): `src-tauri\target\release\bundle\nsis\Refill Tracker_<version>_x64-setup.exe`
 - **MSI installer** (alternative): `src-tauri\target\release\bundle\msi\Refill Tracker_<version>_x64_en-US.msi`
 
+With updater artifacts enabled, the build also emits `.sig` signature files next
+to the installers. Installer builds now require the signing key **and its
+password** in the current PowerShell session:
+
+```powershell
+$env:TAURI_SIGNING_PRIVATE_KEY_PATH = "$env:USERPROFILE\.tauri\refill-tracker.key"
+$env:TAURI_SIGNING_PRIVATE_KEY_PASSWORD = (Get-Content -Raw "$env:USERPROFILE\.tauri\refill-tracker.key.password").Trim()
+```
+
+Otherwise `pnpm tauri build` fails (or hangs waiting for a password prompt).
+`scripts/release.ps1` sets both automatically. The release flow uses the NSIS
+`-setup.exe` and its `.sig` pair.
+
 The installers live under `target\release\bundle\nsis\` and `target\release\bundle\msi\`.
 Don't confuse the `bundle\nsis` folder with the plain `target\release\nsis\x64\` folder
 next to it — that one holds the installer's build *scripts* (`.nsi`/`.nsh`), not the
@@ -97,10 +111,12 @@ What happens on that computer:
   `%APPDATA%\com.pharmacy.refill-tracker\refills.db`, and all migrations run then —
   there is nothing to set up. WebView2 (the app's rendering engine) is preinstalled
   on Windows 10/11, so there's no separate runtime to install.
-- **Updating**: build a newer installer and run it on the same computer — it upgrades
-  in place and **keeps the existing database**. (Hard rule for updates: never edit a
-  migration that has already shipped; only add new ones, or the existing database will
-  reject the new build. Test a new migration against a copy of a real database first.)
+- **Updating**: after the first manual install, the app self-updates from GitHub
+  Releases. It checks at launch and asks before installing. Manual reinstall stays
+  available as a fallback, and updates keep the existing database. (Hard rule for
+  updates: never edit a migration that has already shipped; only add a new one, or
+  the existing database will reject the new build. Test a new migration against a
+  copy of a real database first.)
 - **Uninstalling**: via *Settings → Apps* like any program. This removes the app but
   **leaves the database** in `%APPDATA%`, so data survives a reinstall.
 
@@ -108,6 +124,11 @@ What happens on that computer:
 > `pnpm tauri dev` and the portable exe (they all use the same app identifier), so
 > don't run two of them at once — SQLite will lock. On a separate computer this is a
 > non-issue.
+
+## Releasing an update
+
+See [`Design_docs/releasing.md`](Design_docs/releasing.md) and run
+[`scripts/release.ps1`](scripts/release.ps1) from PowerShell.
 
 ## Running the tests
 

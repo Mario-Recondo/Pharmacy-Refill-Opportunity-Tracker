@@ -1,9 +1,10 @@
-// Settings tab (M5, stories 4.1-4.3): left sidebar of six sections. All edits
+// Settings tab (M5, stories 4.1-4.3): left sidebar of seven sections. All edits
 // persist immediately and call onChanged -> App reloads the lookup bundle
 // app-wide (design doc §6.6). Vocabulary CRUD: inline rename, up/down reorder,
 // kebab menu for move/designations/logo/deactivate/delete-when-unused.
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { getVersion } from "@tauri-apps/api/app";
 import { open as openDialog } from "@tauri-apps/plugin-dialog";
 import { revealItemInDir } from "@tauri-apps/plugin-opener";
 import {
@@ -35,6 +36,7 @@ import { confirmDestructive } from "../lib/confirmDialog";
 import { LOGO_ASSETS, logoUrl } from "../lib/logoAssets";
 import { designationSuffix } from "../lib/rules";
 import { textColorFor } from "../lib/colors";
+import { checkForUpdateManual } from "../lib/updater";
 
 interface SettingsProps {
   lookups: Lookups;
@@ -42,7 +44,7 @@ interface SettingsProps {
   onChanged: () => void;
 }
 
-type SectionKey = "insurances" | "secondary" | "refillNotes" | "callNotes" | "thresholds" | "backup";
+type SectionKey = "insurances" | "secondary" | "refillNotes" | "callNotes" | "thresholds" | "backup" | "about";
 
 const SECTIONS: { key: SectionKey; label: string }[] = [
   { key: "insurances", label: "Insurances" },
@@ -51,6 +53,7 @@ const SECTIONS: { key: SectionKey; label: string }[] = [
   { key: "callNotes", label: "Call notes" },
   { key: "thresholds", label: "Thresholds" },
   { key: "backup", label: "Backup & restore" },
+  { key: "about", label: "About" },
 ];
 
 // ---------------------------------------------------------------------------
@@ -712,6 +715,37 @@ function BackupSection({ lookups, onChanged }: SettingsProps) {
   );
 }
 
+function AboutSection() {
+  const [version, setVersion] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    getVersion().then(setVersion).catch(console.error);
+  }, []);
+
+  const checkNow = async () => {
+    setBusy(true);
+    try {
+      await checkForUpdateManual();
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div>
+      <h3 className="s-sub">Refill Tracker</h3>
+      <p className="s-hint">Version {version ? `v${version}` : "…"}</p>
+      <p>
+        <button className="s-primary" disabled={busy} onClick={checkNow}>
+          {busy ? "Checking…" : "Check for updates"}
+        </button>
+      </p>
+      <p className="s-hint">Updates are published by the owner. The app checks automatically at launch.</p>
+    </div>
+  );
+}
+
 // ---------------------------------------------------------------------------
 
 export default function SettingsView({ lookups, onChanged }: SettingsProps) {
@@ -758,6 +792,7 @@ export default function SettingsView({ lookups, onChanged }: SettingsProps) {
         )}
         {section === "thresholds" && <ThresholdsSection lookups={lookups} onChanged={onChanged} />}
         {section === "backup" && <BackupSection lookups={lookups} onChanged={onChanged} />}
+        {section === "about" && <AboutSection />}
       </div>
     </div>
   );

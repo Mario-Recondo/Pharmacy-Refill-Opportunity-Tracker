@@ -6,6 +6,7 @@ import MonthView, { type MonthNavRequest } from "./components/MonthView";
 import OverdueView from "./components/OverdueView";
 import ReqFollowUpView from "./components/ReqFollowUpView";
 import SettingsView from "./components/SettingsView";
+import { checkForUpdateOnLaunch } from "./lib/updater";
 import "./App.css";
 
 type Tab = "month" | "followup" | "overdue" | "settings";
@@ -24,6 +25,7 @@ function App() {
 
   useEffect(() => {
     loadLookups().then(setLookups).catch((e) => setError(String(e)));
+    checkForUpdateOnLaunch();
   }, []);
 
   // Settings edits re-fetch the whole bundle; the fresh prop flows to every

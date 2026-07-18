@@ -11,6 +11,8 @@
       "allow": [{ "path": "$APPCONFIG" }, { "path": "$APPCONFIG/**" }]
     },
     "dialog:default",
+    "updater:default",
+    "process:allow-restart",
     "sql:default",
     "sql:allow-load",
     "sql:allow-select",

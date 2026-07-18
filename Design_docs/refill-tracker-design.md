@@ -32,6 +32,13 @@ The pharmacy runs PioneerRX. The technician looks up prescriptions in Pioneer by
 
 The database file lives in the OS app-data directory (e.g., `%APPDATA%/RefillTracker/refills.db`). A Settings screen shows the file path and offers a one-click "Back up database" (to a user-chosen location) and "Restore from backup." Backups are taken via SQLite's backup API or `VACUUM INTO` so they are consistent snapshots even while the app is running — never a raw file copy of the live database, which can capture a mid-write (corrupt or stale) state.
 
+### Updates
+
+The app self-updates from the public releases-only GitHub repository. It checks
+at launch and on demand from **Settings → About**; the technician is always
+asked before an installation. Update checks and approved update downloads are
+the app's only network activity. All pharmacy data stays local.
+
 ## 3. Core Architectural Decision: Months Are Data, Not Structure
 
 In the spreadsheet, each month is a cloned tab. In this tool, **there is exactly one refills table**, and every row carries a due date. "The July tab" is simply the grid filtered to `due_date` within July. This one decision enables:
