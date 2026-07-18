@@ -10,7 +10,7 @@ Prerequisites:
   password file at `$env:USERPROFILE\.tauri\refill-tracker.key.password`, and
   both are backed up securely.
 - `gh auth status` succeeds for the GitHub account that can publish
-  `Mario-Recondo/refill-tracker-releases`.
+  `Mario-Recondo/mr-refill-tracker-releases`.
 - PowerShell is being used; the script is intentionally a PowerShell runbook.
 
 Steps:

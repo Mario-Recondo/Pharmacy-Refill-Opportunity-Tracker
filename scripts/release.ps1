@@ -58,17 +58,17 @@ $release = [ordered]@{
   platforms = [ordered]@{
     "windows-x86_64" = [ordered]@{
       signature = $signatureText
-      url = "https://github.com/Mario-Recondo/refill-tracker-releases/releases/download/v$v/refill-tracker_${v}_x64-setup.exe"
+      url = "https://github.com/Mario-Recondo/mr-refill-tracker-releases/releases/download/v$v/refill-tracker_${v}_x64-setup.exe"
     }
   }
 }
 $json = $release | ConvertTo-Json -Depth 5
 [IO.File]::WriteAllText($latest, $json, (New-Object System.Text.UTF8Encoding($false)))
 
-gh release create "v$v" --repo Mario-Recondo/refill-tracker-releases --title "Refill Tracker $v" --notes $Notes $setupAsset $sigAsset $latest
+gh release create "v$v" --repo Mario-Recondo/mr-refill-tracker-releases --title "Refill Tracker $v" --notes $Notes $setupAsset $sigAsset $latest
 if ($LASTEXITCODE -ne 0) { throw "gh release create failed; if the tag already exists, bump the version or delete the release." }
 
 Write-Host "Released Refill Tracker $v"
-Write-Host "Asset URL: https://github.com/Mario-Recondo/refill-tracker-releases/releases/download/v$v/refill-tracker_${v}_x64-setup.exe"
-Write-Host "Updater endpoint: https://github.com/Mario-Recondo/refill-tracker-releases/releases/latest/download/latest.json"
+Write-Host "Asset URL: https://github.com/Mario-Recondo/mr-refill-tracker-releases/releases/download/v$v/refill-tracker_${v}_x64-setup.exe"
+Write-Host "Updater endpoint: https://github.com/Mario-Recondo/mr-refill-tracker-releases/releases/latest/download/latest.json"
 Write-Host "Installed apps will pick up the update on their next launch."

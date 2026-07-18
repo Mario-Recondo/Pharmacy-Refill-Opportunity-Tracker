@@ -12,7 +12,7 @@ putting source access or credentials into the installed application.
 ## Decision
 
 Use `tauri-plugin-updater` with a minisign keypair. Serve signed installers and
-`latest.json` from the separate public `Mario-Recondo/refill-tracker-releases`
+`latest.json` from the separate public `Mario-Recondo/mr-refill-tracker-releases`
 repository; the app embeds that endpoint and the public key.
 
 ## Alternatives considered
