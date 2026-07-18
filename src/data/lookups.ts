@@ -31,7 +31,7 @@ export async function loadLookups(): Promise<Lookups> {
     await Promise.all([
       loadTable("insurances", ", group_id, is_medicare, is_medicaid"),
       db.select<InsuranceGroup[]>(
-        "SELECT id, name, logo, sort_order, active FROM insurance_groups ORDER BY sort_order, name",
+        "SELECT id, name, logo, sort_order, active, is_default FROM insurance_groups ORDER BY sort_order, name",
       ),
       loadTable("secondary_coverages", ", logo"),
       loadTable("refill_notes", ", color, meaning, allows_call_note, shows_age_counter"),

@@ -26,8 +26,8 @@ const LOOKUPS = {
   secondaryCoverages: [],
   insurances: [],
   insuranceGroups: [
-    { id: 10, name: "CVS Health", logo: "cvs-health", sort_order: 0, active: 1 },
-    { id: 11, name: "Independent PBMs", logo: null, sort_order: 0, active: 1 },
+    { id: 10, name: "CVS Health", logo: "cvs-health", sort_order: 0, active: 1, is_default: 1 },
+    { id: 11, name: "Independent PBMs", logo: null, sort_order: 0, active: 1, is_default: 0 },
   ],
   settings: {} as Lookups["settings"],
 } satisfies Lookups;

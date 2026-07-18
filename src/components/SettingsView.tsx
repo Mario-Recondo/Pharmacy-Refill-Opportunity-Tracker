@@ -328,7 +328,7 @@ function InsuranceSection({ lookups, onChanged }: SettingsProps) {
                   const items: MenuItem[] = [
                     { label: "Pick logo", submenu: logoPickerItems(group.logo, (k) => wrap(setGroupLogo(group.id, k))) },
                   ];
-                  if (count === 0) {
+                  if (count === 0 && group.is_default !== 1) {
                     items.push({
                       label: "Delete…",
                       danger: true,

@@ -134,8 +134,12 @@ export async function groupPlanCount(id: number): Promise<number> {
 /** Groups delete only when empty — plans are never silently orphaned. */
 export function deleteGroupIfEmpty(id: number): Promise<boolean> {
   return serializeWrite(async () => {
-    if ((await groupPlanCount(id)) > 0) return false;
     const db = await getDb();
+    const [group] = await db.select<{ is_default: number }[]>(
+      "SELECT is_default FROM insurance_groups WHERE id = $1",
+      [id],
+    );
+    if (!group || group.is_default === 1 || (await groupPlanCount(id)) > 0) return false;
     await db.execute("DELETE FROM insurance_groups WHERE id = $1", [id]);
     return true;
   });

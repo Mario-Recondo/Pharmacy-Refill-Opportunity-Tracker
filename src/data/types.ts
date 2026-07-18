@@ -26,6 +26,7 @@ export interface InsuranceGroup {
   logo: string | null; // bundled asset key; NULL = no logo (plans render plain)
   sort_order: number;
   active: number;
+  is_default: number;
 }
 
 export interface CopayTier {
