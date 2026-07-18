@@ -98,6 +98,12 @@ pub fn run() {
             sql: include_str!("../migrations/005_drugs_null_ndc_unique.sql"),
             kind: MigrationKind::Up,
         },
+        Migration {
+            version: 6,
+            description: "default_groups",
+            sql: include_str!("../migrations/006_default_groups.sql"),
+            kind: MigrationKind::Up,
+        },
     ];
 
     tauri::Builder::default()

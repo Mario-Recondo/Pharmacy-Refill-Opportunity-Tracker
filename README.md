@@ -62,8 +62,52 @@ day-to-day development uses plain `pnpm tauri dev`.
 pnpm tauri build
 ```
 
-- Portable exe: `src-tauri\target\release\refill-tracker.exe`
-- Installers (MSI/NSIS): `src-tauri\target\release\bundle\`
+> Run this from **PowerShell**, not Git Bash. Tauri runs its `beforeBuildCommand`
+> (`pnpm build`) through `cmd.exe`, which can't read Git Bash's Unix-style `PATH`
+> and fails with `'pnpm' is not recognized`.
+
+The build produces three artifacts:
+
+- **Portable exe** (run directly, no install): `src-tauri\target\release\refill-tracker.exe`
+- **NSIS installer** (ship this — see below): `src-tauri\target\release\bundle\nsis\Refill Tracker_<version>_x64-setup.exe`
+- **MSI installer** (alternative): `src-tauri\target\release\bundle\msi\Refill Tracker_<version>_x64_en-US.msi`
+
+The installers live under `target\release\bundle\nsis\` and `target\release\bundle\msi\`.
+Don't confuse the `bundle\nsis` folder with the plain `target\release\nsis\x64\` folder
+next to it — that one holds the installer's build *scripts* (`.nsi`/`.nsh`), not the
+installer itself.
+
+## Installing on another computer
+
+To put Refill Tracker on the pharmacy computer (or any other Windows PC):
+
+1. **Build the installer** on your machine (above), then copy
+   `Refill Tracker_<version>_x64-setup.exe` from `src-tauri\target\release\bundle\nsis\`
+   to the target computer — USB drive, a download link, wherever's easiest.
+2. **Double-click the setup `.exe`** on that computer. Windows SmartScreen will warn
+   *"Windows protected your PC / unknown publisher"* because the app isn't
+   code-signed — click **More info → Run anyway**. (A code-signing certificate
+   removes this warning but isn't required.)
+3. The installer runs **per-user by default — no administrator rights needed** — and
+   adds a Start Menu entry. Launch it like any installed app.
+
+What happens on that computer:
+
+- **The database is created automatically on first launch** at
+  `%APPDATA%\com.pharmacy.refill-tracker\refills.db`, and all migrations run then —
+  there is nothing to set up. WebView2 (the app's rendering engine) is preinstalled
+  on Windows 10/11, so there's no separate runtime to install.
+- **Updating**: build a newer installer and run it on the same computer — it upgrades
+  in place and **keeps the existing database**. (Hard rule for updates: never edit a
+  migration that has already shipped; only add new ones, or the existing database will
+  reject the new build. Test a new migration against a copy of a real database first.)
+- **Uninstalling**: via *Settings → Apps* like any program. This removes the app but
+  **leaves the database** in `%APPDATA%`, so data survives a reinstall.
+
+> On your own dev machine the installed app shares the same `%APPDATA%` database as
+> `pnpm tauri dev` and the portable exe (they all use the same app identifier), so
+> don't run two of them at once — SQLite will lock. On a separate computer this is a
+> non-issue.
 
 ## Running the tests
 
