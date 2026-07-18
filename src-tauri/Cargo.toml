@@ -1,6 +1,6 @@
 [package]
 name = "refill-tracker"
-version = "1.0.1"
+version = "1.0.3"
 description = "Prescription refill tracker for an independent pharmacy: refills due, contact attempts, copays and verified profits"
 authors = ["Mario Recondo"]
 edition = "2021"
