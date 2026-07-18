@@ -78,7 +78,7 @@ to the installers. Installer builds now require the signing key **and its
 password** in the current PowerShell session:
 
 ```powershell
-$env:TAURI_SIGNING_PRIVATE_KEY_PATH = "$env:USERPROFILE\.tauri\refill-tracker.key"
+$env:TAURI_SIGNING_PRIVATE_KEY = "$env:USERPROFILE\.tauri\refill-tracker.key"
 $env:TAURI_SIGNING_PRIVATE_KEY_PASSWORD = (Get-Content -Raw "$env:USERPROFILE\.tauri\refill-tracker.key.password").Trim()
 ```
 

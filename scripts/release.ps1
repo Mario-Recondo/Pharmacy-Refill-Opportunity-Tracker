@@ -29,7 +29,11 @@ $keyPassword = (Get-Content -Raw -LiteralPath $passwordPath).Trim()
 if ([string]::IsNullOrWhiteSpace($keyPassword)) {
   throw "Key password file at $passwordPath is empty; an empty password cannot pass through the environment on Windows and the build would hang."
 }
-$env:TAURI_SIGNING_PRIVATE_KEY_PATH = $keyPath
+# TAURI_SIGNING_PRIVATE_KEY (accepts a path or the key content) is the variable
+# the build's updater-signing step reads; the _PATH variant is only honored by
+# `tauri signer sign` and the build fails with "no private key" on it
+# (verified 2026-07-18 on the first v1.0.1 release attempt).
+$env:TAURI_SIGNING_PRIVATE_KEY = $keyPath
 $env:TAURI_SIGNING_PRIVATE_KEY_PASSWORD = $keyPassword
 
 pnpm tauri build
