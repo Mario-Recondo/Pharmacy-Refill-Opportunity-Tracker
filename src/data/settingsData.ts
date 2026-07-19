@@ -5,7 +5,7 @@
 import Database from "@tauri-apps/plugin-sql";
 import { invoke } from "@tauri-apps/api/core";
 import { appConfigDir, join } from "@tauri-apps/api/path";
-import { getDb, resetDb, serializeWrite } from "../db";
+import { executeAtomicBatch, getDb, resetDb, serializeWrite } from "../db";
 import type { CopayTier, Lookup } from "./types";
 
 export type LookupTable = "insurances" | "secondary_coverages" | "refill_notes" | "call_notes";
@@ -82,7 +82,12 @@ export function deleteLookupIfUnused(table: LookupTable, id: number): Promise<bo
   return serializeWrite(async () => {
     if ((await lookupUsageCount(table, id)) > 0) return false;
     const db = await getDb();
-    await db.execute(`DELETE FROM ${table} WHERE id = $1`, [id]);
+    if (table === "insurances" || table === "secondary_coverages") {
+      await executeAtomicBatch([
+        { sql: `DELETE FROM import_aliases WHERE kind = $1 AND target_id = $2`, params: [table === "insurances" ? "insurance" : "secondary", id] },
+        { sql: `DELETE FROM ${table} WHERE id = $1`, params: [id] },
+      ]);
+    } else await db.execute(`DELETE FROM ${table} WHERE id = $1`, [id]);
     return true;
   });
 }

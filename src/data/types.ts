@@ -73,6 +73,7 @@ export interface RefillRow {
   old_profit: number | null;
   new_profit: number | null;
   refills_filled: number | null;
+  refills_left: number | null;
   refill_note_id: number | null;
   call_note_id: number | null;
   refill_note_set_at: string | null; // ISO timestamp; drives the Nimble Link aging counter
@@ -108,6 +109,7 @@ export const EDITABLE_FIELDS = [
   "old_profit",
   "new_profit",
   "refills_filled",
+  "refills_left",
   "refill_note_id",
   "call_note_id",
   "status",

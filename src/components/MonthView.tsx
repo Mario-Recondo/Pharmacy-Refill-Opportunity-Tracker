@@ -16,6 +16,7 @@ import { RowCtxMenu, type CtxMenuState, type GridCtx } from "./gridParts";
 import OpportunitiesPanel from "./OpportunitiesPanel";
 import RefillDrawer from "./RefillDrawer";
 import { insuranceDisplayName } from "../lib/rules";
+import ImportWizard from "./ImportWizard";
 
 const MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
 
@@ -67,6 +68,7 @@ export default function MonthView({ lookups, active, navRequest, onDataChanged }
   const [filters, setFilters] = useState<Filters>(NO_FILTERS);
   const [showSecondary, setShowSecondary] = useState(false);
   const [drawer, setDrawer] = useState<{ kind: "edit"; id: number } | { kind: "create"; dueDate: string } | null>(null);
+  const [importing, setImporting] = useState(false);
   const [ctxMenu, setCtxMenu] = useState<CtxMenuState | null>(null);
   // row to focus (and maybe open) once its month's rows are loaded — history jumps, due-date moves, fresh creates
   const pendingFocusRef = useRef<{ id: number; open: boolean } | null>(null);
@@ -416,6 +418,7 @@ export default function MonthView({ lookups, active, navRequest, onDataChanged }
           <button className="add-refill" onClick={openCreate}>
             ＋ Add refill
           </button>
+          <button className="add-refill" onClick={() => setImporting(true)}>Import…</button>
           <span className="row-count">
             {filteredRows.length === rows.length ? `${rows.length} rows` : `${filteredRows.length} of ${rows.length} rows`}
           </span>
@@ -435,12 +438,12 @@ export default function MonthView({ lookups, active, navRequest, onDataChanged }
         <div className="empty-month">
           <h2>No refills for {ymLabel(ym)} yet</h2>
           <p>
-            Add refills manually or import the month's PioneerRX report (v2). The grid
-            fills in as data arrives.
+            Add refills manually or import a spreadsheet. Imported rows use their own due dates.
           </p>
           <button className="add-refill" onClick={openCreate}>
             ＋ Add refill
           </button>
+          <button className="add-refill" onClick={() => setImporting(true)}>Import spreadsheet…</button>
         </div>
       ) : (
         <div className="grid-wrap">
@@ -476,6 +479,7 @@ export default function MonthView({ lookups, active, navRequest, onDataChanged }
       </div>
 
       {ctxMenu && <RowCtxMenu menu={ctxMenu} onDelete={deleteRow} onDismiss={() => setCtxMenu(null)} />}
+      {importing && <ImportWizard lookups={lookups} visibleMonth={ym} onClose={() => setImporting(false)} onChanged={() => { setImporting(false); onDataChanged(); loadMonth(ym).then(setRows); loadMonthCounts().then(setMonthCounts); }} />}
 
       {drawer?.kind === "create" && (
         <RefillDrawer

@@ -188,8 +188,8 @@ export function refillCols(lookups: Lookups, opts: RefillColOpts) {
     oldProfit: profitCol("old_profit", "Old Profit"),
     newProfit: profitCol("new_profit", "New Profit"),
     refillsFilled: {
-      field: "refills_filled",
-      headerName: "Refills",
+      field: "refills_left",
+      headerName: "Refills left",
       width: 85,
       editable: true,
       valueParser: (p) => {
