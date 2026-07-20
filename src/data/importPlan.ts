@@ -18,7 +18,7 @@ export interface ImportCommitPlan { rows: Array<{ row: ParsedImportRow; action: 
 
 export const KNOWN_HEADERS: Record<string, ImportTarget> = {
   "days supply ends on": "due_date", "rx number": "rx_number", "dispensed item name": "drug_name",
-  "patient paid amount": "old_copay", "net profit": "old_profit", "refills left": "refills_left",
+  "patient paid amount": "old_copay", "net profit": "old_profit", "refills left": "refills_left", "refills remaining": "refills_left",
   "number of refills filled": "refills_filled", primary: "insurance", secondary: "secondary", "dispensed item ndc": "ignore",
 };
 const norm = (s: string) => s.trim().replace(/\s+/g, " ").toUpperCase();

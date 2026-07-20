@@ -18,6 +18,13 @@ describe("spreadsheet import planning", () => {
     expect(proposeMapping(["Primary", "Primary"]).issues[0]).toContain("duplicate target");
   });
 
+  it("auto-maps every column of the real full PioneerRX export", () => {
+    const fullExport = ["Rx Number", "Dispensed Item Name", "Primary", "Secondary", "Patient Paid Amount", "Dispensed Item NDC", "Days Supply Ends On", "Net Profit", "Refills Remaining"];
+    const m = proposeMapping(fullExport);
+    expect(m.valid).toBe(true);
+    expect(m.targets).toEqual(["rx_number", "drug_name", "insurance", "secondary", "old_copay", "ignore", "due_date", "old_profit", "refills_left"]);
+  });
+
   it("parses dates, money, refills, and numeric Rx values safely", () => {
     const sheet: ImportSheet = { headers, rows: [["7/1/2026", 428566, "Test Drug", "$1,234.56", "(12.50)", "3", "Plan", ""]] };
     const row = parseRows(sheet, mapping)[0];
