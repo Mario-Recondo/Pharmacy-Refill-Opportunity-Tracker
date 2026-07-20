@@ -76,7 +76,17 @@ export function parseRows(sheet: ImportSheet, mapping: ColumnMapping): ParsedImp
     const leftRaw = cell(raw, mapping, "refills_left"); let left: number|null = null;
     if (leftRaw != null && text(leftRaw) !== null) { left = Number(leftRaw); if (!Number.isInteger(left) || left < 0) { left = null; issues.push("Refills left must be an integer >= 0"); } }
     if (raw.some((v) => typeof v === "object" && v && "__overflow" in v)) issues.push("row has more cells than headers");
-    return { rowIndex, rx_number: rx, due_date: due.value, drug_name: text(cell(raw,mapping,"drug_name")), insurance: text(cell(raw,mapping,"insurance")), secondary: text(cell(raw,mapping,"secondary")), old_copay: copay.value, old_profit: profit.value, refills_left: left, refills_filled: (() => { const v = cell(raw,mapping,"refills_filled"); if (v == null || text(v) === null) return null; const n = Number(v); return Number.isInteger(n) && n >= 0 ? n : null; })(), issues };
+    // PioneerRX quirk (verified against the real July export): rows with no
+    // secondary coverage carry the patient-paid amount IN the Secondary column,
+    // and Patient Paid Amount comes out blank. A number here is never a plan
+    // name — reroute it to the copay (if blank) and clear the secondary.
+    let secondary = text(cell(raw, mapping, "secondary"));
+    let copayValue = copay.value;
+    if (secondary !== null) {
+      const shifted = money(cell(raw, mapping, "secondary"));
+      if (shifted.value !== null) { if (copayValue === null) copayValue = shifted.value; secondary = null; }
+    }
+    return { rowIndex, rx_number: rx, due_date: due.value, drug_name: text(cell(raw,mapping,"drug_name")), insurance: text(cell(raw,mapping,"insurance")), secondary, old_copay: copayValue, old_profit: profit.value, refills_left: left, refills_filled: (() => { const v = cell(raw,mapping,"refills_filled"); if (v == null || text(v) === null) return null; const n = Number(v); return Number.isInteger(n) && n >= 0 ? n : null; })(), issues };
   });
 }
 
