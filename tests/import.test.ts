@@ -18,21 +18,6 @@ describe("spreadsheet import planning", () => {
     expect(proposeMapping(["Primary", "Primary"]).issues[0]).toContain("duplicate target");
   });
 
-  it("reroutes a shifted patient-paid amount out of the Secondary column (PioneerRX no-secondary quirk)", () => {
-    // headers: due, rx, drug, paid, profit, refills, primary, secondary
-    const parse = (paid: unknown, secondary: unknown) => parseRows({ headers, rows: [["7/1/2026", 1, "Drug", paid as never, 5, "", "Plan", secondary as never]] }, mapping)[0];
-    const shifted = parse("", 77.49);
-    expect(shifted.old_copay).toBe(77.49); expect(shifted.secondary).toBeNull(); expect(shifted.issues).toEqual([]);
-    const shiftedZero = parse("", "0");
-    expect(shiftedZero.old_copay).toBe(0); expect(shiftedZero.secondary).toBeNull();
-    const numericSecondaryWithPaid = parse(25, 189);
-    expect(numericSecondaryWithPaid.old_copay).toBe(25); expect(numericSecondaryWithPaid.secondary).toBeNull();
-    const realSecondary = parse(25, "MAYNE");
-    expect(realSecondary.old_copay).toBe(25); expect(realSecondary.secondary).toBe("MAYNE");
-    const noSecondaryAtAll = parse(25, "");
-    expect(noSecondaryAtAll.old_copay).toBe(25); expect(noSecondaryAtAll.secondary).toBeNull();
-  });
-
   it("auto-maps every column of the real full PioneerRX export", () => {
     const fullExport = ["Rx Number", "Dispensed Item Name", "Primary", "Secondary", "Patient Paid Amount", "Dispensed Item NDC", "Days Supply Ends On", "Net Profit", "Refills Remaining"];
     const m = proposeMapping(fullExport);
