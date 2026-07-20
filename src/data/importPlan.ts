@@ -10,6 +10,29 @@ export interface ParsedImportRow {
 export type RowDisposition = "new" | "update" | "no-change" | "probable-duplicate" | "needs-selection" | "drug-conflict" | "error" | "skip";
 export interface ExistingRefill { id: number; rx_number: string; due_date: string; status: string; drug_id: number; drug_name: string; insurance_id?: number|null; secondary_id?: number|null; old_copay?: number|null; old_profit?: number|null; refills_filled?: number|null; refills_left?: number|null; }
 export interface NameResolution { rawName: string; kind: "insurance" | "secondary"; choice: "existing" | "create" | "blank" | "unresolved"; targetId?: number; targetName?: string; count: number; }
+
+export function applyNameChoice(resolutions: NameResolution[], target: NameResolution, value: string): NameResolution[] {
+  const targetKey = `${target.kind}|${norm(target.rawName)}`;
+  const index = resolutions.findIndex((r) => `${r.kind}|${norm(r.rawName)}` === targetKey);
+  if (index < 0) return resolutions;
+  const old = resolutions[index];
+  let next: NameResolution;
+  if (value === "unresolved" || value === "blank") next = { rawName: old.rawName, kind: old.kind, choice: value, count: old.count };
+  else if (value === "create") next = { rawName: old.rawName, kind: old.kind, choice: "create", targetName: old.rawName, count: old.count };
+  else if (value.startsWith("create:") && value.slice(7)) next = { rawName: old.rawName, kind: old.kind, choice: "create", targetName: value.slice(7), count: old.count };
+  else {
+    const id = Number(value);
+    if (!Number.isInteger(id) || id <= 0) return resolutions;
+    next = { rawName: old.rawName, kind: old.kind, choice: "existing", targetId: id, count: old.count };
+  }
+  const oldOwnedName = old.choice === "create" && norm(old.targetName ?? old.rawName) === norm(old.rawName) ? norm(old.targetName ?? old.rawName) : null;
+  const keepsOwnership = next.choice === "create" && norm(next.targetName ?? next.rawName) === norm(old.rawName);
+  return resolutions.map((r, i) => {
+    if (i === index) return next;
+    if (!oldOwnedName || keepsOwnership || r.kind !== old.kind || r.choice !== "create" || norm(r.rawName) === oldOwnedName || norm(r.targetName ?? r.rawName) !== oldOwnedName) return r;
+    return { rawName: r.rawName, kind: r.kind, choice: "unresolved", count: r.count };
+  });
+}
 export interface Disposition {
   row: ParsedImportRow; kind: RowDisposition; reason?: string; existing?: ExistingRefill; candidates?: ExistingRefill[];
   action?: "update" | "insert" | "skip"; fillFields?: string[]; finalDue?: string;

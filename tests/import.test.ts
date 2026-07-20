@@ -3,11 +3,12 @@ import { freshDb, rawDb, seedRefill } from "./helpers/fakeTauri";
 import { commitImport, loadAliases, StaleImportError } from "../src/data/importData";
 import { deleteLookupIfUnused } from "../src/data/settingsData";
 import { batchInvocations, resetBatchInvocations } from "./stubs/api-core";
-import { buildCommitPlan, computeDispositions, parseRows, proposeMapping, resolveNames, unresolvedAttentionCount, validateMapping, validatePlan, type Disposition, type ImportSheet, type ImportTarget, type ParsedImportRow } from "../src/data/importPlan";
+import { applyNameChoice, buildCommitPlan, computeDispositions, parseRows, proposeMapping, resolveNames, unresolvedAttentionCount, validateMapping, validatePlan, type Disposition, type ImportSheet, type ImportTarget, type ParsedImportRow, type NameResolution } from "../src/data/importPlan";
 import { loadRxHistory } from "../src/data/refills";
 
 const headers = ["Days Supply Ends On", "Rx Number", "Dispensed Item Name", "Patient Paid Amount", "Net Profit", "Refills Left", "Primary", "Secondary"];
 const mapping = proposeMapping(headers);
+const name = (rawName: string, kind: "insurance" | "secondary", choice: NameResolution["choice"], extra: Partial<NameResolution> = {}): NameResolution => ({ rawName, kind, choice, count: 1, ...extra });
 
 describe("spreadsheet import planning", () => {
   beforeEach(() => freshDb());
@@ -117,6 +118,70 @@ describe("spreadsheet import planning", () => {
     expect(row.drug).toBe("Brand New Drug");
     const alias = db.prepare("SELECT target_id FROM import_aliases WHERE kind='insurance' AND raw_name='VILLAGE RX LOCAL'").get() as any;
     expect(alias.target_id).toBe(ins.id);
+  });
+
+  it("coalesces byte-identical pending secondary creates at commit time", async () => {
+    const db = rawDb(); seedRefill({ rx: "dedupe-seed", due: "2026-06-01", drug: "Dedupe Drug" });
+    const drug = db.prepare("SELECT id FROM drugs WHERE name='Dedupe Drug'").get() as { id: number };
+    const row = (rowIndex: number, rx_number: string, secondary: string) => ({ rowIndex, rx_number, due_date: `2026-07-0${rowIndex + 1}`, drug_name: "Dedupe Drug", insurance: null, secondary, old_copay: null, old_profit: null, refills_left: null, refills_filled: null, issues: [] as string[] });
+    await commitImport({
+      rows: [
+        { action: "insert", drugId: drug.id, drugName: "Dedupe Drug", finalDue: "2026-07-01", row: row(0, "dedupe-1", "SLYND") },
+        { action: "insert", drugId: drug.id, drugName: "Dedupe Drug", finalDue: "2026-07-02", row: row(1, "dedupe-2", "Slynd Copay") },
+      ],
+      aliases: [
+        { rawName: "SLYND", kind: "secondary", choice: "create", targetName: "SLYND", count: 1 },
+        { rawName: "Slynd Copay", kind: "secondary", choice: "create", targetName: "SLYND", count: 1 },
+      ], columnMapping: {},
+    });
+    const lookups = db.prepare("SELECT id FROM secondary_coverages WHERE name='SLYND'").all() as { id: number }[];
+    expect(lookups).toHaveLength(1);
+    const aliases = db.prepare("SELECT kind, target_id FROM import_aliases WHERE raw_name IN ('SLYND','Slynd Copay') ORDER BY raw_name").all() as { kind: string; target_id: number }[];
+    expect(aliases).toHaveLength(2); expect(aliases.every((a) => a.kind === "secondary")).toBe(true); expect(aliases.every((a) => a.target_id === lookups[0].id)).toBe(true);
+    const refills = db.prepare("SELECT secondary_id FROM refills WHERE rx_number IN ('dedupe-1','dedupe-2') ORDER BY rx_number").all() as { secondary_id: number }[];
+    expect(refills).toHaveLength(2); expect(refills.every((r) => r.secondary_id === lookups[0].id)).toBe(true);
+  });
+
+  it("applies name-choice transitions without stale fields or dependent drift", () => {
+    // Build owner + two dependents through the public grammar itself.
+    let all = [name("SLYND", "secondary", "unresolved"), name("Slynd Copay", "secondary", "unresolved"), name("Slynd Other", "secondary", "unresolved")];
+    all = applyNameChoice(all, all[0], "create"); // plain "create": self-owned
+    expect(all[0]).toMatchObject({ choice: "create", targetName: "SLYND" }); expect(all[0]).not.toHaveProperty("targetId");
+    all = applyNameChoice(all, all[1], "create:SLYND"); // reference round-trips onto the selected row
+    expect(all[1]).toMatchObject({ choice: "create", targetName: "SLYND" }); expect(all[1]).not.toHaveProperty("targetId");
+    all = applyNameChoice(all, all[2], "create:SLYND");
+
+    // Changing a DEPENDENT touches nobody else (owner + sibling keep their choices).
+    const afterDepChange = applyNameChoice(all, all[1], "blank");
+    expect(afterDepChange[1]).toMatchObject({ choice: "blank" }); expect(afterDepChange[1]).not.toHaveProperty("targetName");
+    expect(afterDepChange[0]).toMatchObject({ choice: "create", targetName: "SLYND" });
+    expect(afterDepChange[2]).toMatchObject({ choice: "create", targetName: "SLYND" });
+
+    // OWNER → existing: dependents reset to unresolved; owner carries no stale targetName.
+    const ownerToExisting = applyNameChoice(all, all[0], "42");
+    expect(ownerToExisting[0]).toMatchObject({ choice: "existing", targetId: 42 }); expect(ownerToExisting[0]).not.toHaveProperty("targetName");
+    expect(ownerToExisting[1].choice).toBe("unresolved"); expect(ownerToExisting[2].choice).toBe("unresolved");
+
+    // OWNER → unresolved and OWNER → blank: same dependent reset, both fields cleared.
+    for (const value of ["unresolved", "blank"] as const) {
+      const res = applyNameChoice(all, all[0], value);
+      expect(res[0]).toMatchObject({ choice: value }); expect(res[0]).not.toHaveProperty("targetId"); expect(res[0]).not.toHaveProperty("targetName");
+      expect(res[1].choice).toBe("unresolved"); expect(res[2].choice).toBe("unresolved");
+    }
+
+    // OWNER remapped to another pending creation: abandons its own name, dependents reset.
+    const remapped = applyNameChoice(all, all[0], "create:OTHER");
+    expect(remapped[0]).toMatchObject({ choice: "create", targetName: "OTHER" }); expect(remapped[0]).not.toHaveProperty("targetId");
+    expect(remapped[1].choice).toBe("unresolved"); expect(remapped[2].choice).toBe("unresolved");
+
+    // existing → create clears the stale targetId.
+    const fromExisting = applyNameChoice([name("X", "secondary", "existing", { targetId: 42 })], name("X", "secondary", "existing", { targetId: 42 }), "create");
+    expect(fromExisting[0]).toMatchObject({ choice: "create", targetName: "X" }); expect(fromExisting[0]).not.toHaveProperty("targetId");
+
+    // Malformed values never mutate state and never produce targetId: NaN.
+    expect(applyNameChoice(all, all[0], "not-a-choice")).toEqual(all);
+    expect(applyNameChoice(all, all[0], "-3")).toEqual(all);
+    expect(applyNameChoice(all, all[0], "create:")).toEqual(all);
   });
 
   it("rolls back the whole batch: a late failing statement leaves no lookup, drug, or refill", async () => {

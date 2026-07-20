@@ -51,7 +51,12 @@ export function toItems(rows: Lookup[], currentId?: number | null): PillItem[] {
 export function toInsuranceItems(rows: Lookup[], currentId?: number | null): PillItem[] {
   return rows
     .filter((r) => r.active === 1 || r.id === currentId)
-    .map((r) => ({ value: r.id, label: insuranceDisplayName(r) }));
+    .map((r) => ({ value: r.id, label: insuranceDisplayName(r) }))
+    .sort((a, b) => String(a.label).localeCompare(String(b.label), undefined, { sensitivity: "base" }));
+}
+
+export function sortItems(items: PillItem[]): PillItem[] {
+  return [...items].sort((a, b) => String(a.label).localeCompare(String(b.label), undefined, { sensitivity: "base" }));
 }
 
 // dropdown cells open on a single click (technician feedback, 2026-07-11);
@@ -146,7 +151,7 @@ export function refillCols(lookups: Lookups, opts: RefillColOpts) {
       editable: true,
       cellEditor: PillSelectEditor,
       cellEditorPopup: true,
-      cellEditorParams: { items: toItems(lookups.secondaryCoverages), allowClear: true },
+      cellEditorParams: { items: sortItems(toItems(lookups.secondaryCoverages)), allowClear: true },
       cellRenderer: SecondaryRenderer,
     } as ColDef<RefillRow>,
     refillNote: {

@@ -112,7 +112,7 @@ function App() {
         </button>
       </nav>
       <div className={tab === "month" ? "tab-page" : "tab-page off"}>
-        <MonthView lookups={lookups} active={tab === "month"} navRequest={monthNav} onDataChanged={onDataChanged} />
+        <MonthView lookups={lookups} active={tab === "month"} navRequest={monthNav} onDataChanged={onDataChanged} onLookupsChanged={reloadLookups} />
       </div>
       <div className={tab === "followup" ? "tab-page" : "tab-page off"}>
         <ReqFollowUpView lookups={lookups} active={tab === "followup"} onOpenInMonth={openInMonth} onDataChanged={onDataChanged} />

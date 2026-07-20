@@ -59,9 +59,10 @@ interface MonthViewProps {
   navRequest: MonthNavRequest | null;
   /** any persisted change (edit/create/delete) — App refreshes the Overdue badge */
   onDataChanged: () => void;
+  onLookupsChanged: () => void;
 }
 
-export default function MonthView({ lookups, active, navRequest, onDataChanged }: MonthViewProps) {
+export default function MonthView({ lookups, active, navRequest, onDataChanged, onLookupsChanged }: MonthViewProps) {
   const [ym, setYm] = useState(currentYm);
   const [rows, setRows] = useState<RefillRow[]>([]);
   const [monthCounts, setMonthCounts] = useState<Map<string, number>>(new Map());
@@ -386,7 +387,7 @@ export default function MonthView({ lookups, active, navRequest, onDataChanged }
             onChange={(e) => setFilters({ ...filters, insuranceId: e.target.value ? Number(e.target.value) : null })}
           >
             <option value="">All insurances</option>
-            {lookups.insurances.filter((i) => i.active === 1).map((i) => (
+            {[...lookups.insurances].filter((i) => i.active === 1).sort((a, b) => insuranceDisplayName(a).localeCompare(insuranceDisplayName(b), undefined, { sensitivity: "base" })).map((i) => (
               <option key={i.id} value={i.id}>{insuranceDisplayName(i)}</option>
             ))}
           </select>
@@ -479,7 +480,7 @@ export default function MonthView({ lookups, active, navRequest, onDataChanged }
       </div>
 
       {ctxMenu && <RowCtxMenu menu={ctxMenu} onDelete={deleteRow} onDismiss={() => setCtxMenu(null)} />}
-      {importing && <ImportWizard lookups={lookups} visibleMonth={ym} onClose={() => setImporting(false)} onChanged={() => { setImporting(false); onDataChanged(); loadMonth(ym).then(setRows); loadMonthCounts().then(setMonthCounts); }} />}
+      {importing && <ImportWizard lookups={lookups} visibleMonth={ym} onClose={() => setImporting(false)} onChanged={() => { setImporting(false); onLookupsChanged(); onDataChanged(); loadMonth(ym).then(setRows); loadMonthCounts().then(setMonthCounts); }} />}
 
       {drawer?.kind === "create" && (
         <RefillDrawer
