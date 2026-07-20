@@ -14,7 +14,7 @@ This is a single-user tool. There is no server, no authentication, no multi-user
 
 ### Source system context (PioneerRX)
 
-The pharmacy runs PioneerRX. The technician looks up prescriptions in Pioneer by Rx number (hence the click-to-copy requirement on Rx #). Pioneer can export a CSV report; **the technician selects which columns each export contains, so no two files are guaranteed to look the same** (one real sample omitted `Days Supply Ends On` entirely). The full set of columns known to be available today, per prescription: `Rx Number`, `Dispensed Item Name`, `Dispensed Item NDC`, `Days Supply Ends On`, `Patient Paid Amount`, `Net Profit`, `Number Of Refills Filled`, `Primary` (primary insurance), and `Secondary` (secondary coverage — observed values are mostly coupon/copay-assistance programs, e.g. MAYNE, JOURNEY, Opus Health Coupon Plans). That export maps almost 1:1 onto the queue this tool manages and is the basis of the v2 import feature, which must tolerate any subset of these columns.
+The pharmacy runs PioneerRX. The technician looks up prescriptions in Pioneer by Rx number (hence the click-to-copy requirement on Rx #). Pioneer exports arrive as an `.xlsx` spreadsheet; CSV remains accepted for saved-as-CSV reports. The fixed contract is `Days Supply Ends On`, `Rx Number`, `Dispensed Item Name`, `Patient Paid Amount`, `Net Profit`, `Refills Left`, `Primary`, and `Secondary`; `Dispensed Item NDC` is explicitly ignored and deferred. The wizard maps these fields and previews every row before import.
 
 **Profit is never computed by this tool.** When the technician runs insurance in Pioneer, an adjudication window shows the patient copay, the pharmacy's drug cost, and the net profit. Insurance reimbursement is unpredictable (payers lower/raise reimbursement or drop coverage without warning), so the tool only stores profit values a human verified in Pioneer. "Expected profit" shown in alerts is always the **last verified** profit, explicitly labeled unverified for the current fill.
 
@@ -55,8 +55,8 @@ The month view is the default UI, with a month picker; a day filter within it is
 "Months are data" does **not** mean the tool knows a year of refills in advance. A month exists only implicitly — it has content once at least one refill row carries a due date within it. Data arrives incrementally, one month (or partial month) at a time, via import or manual entry. The design handles this as follows:
 
 - **Month picker signals data presence.** The picker visually distinguishes months that contain rows (with a row count) from months that are empty. The technician can navigate to any month, past or future.
-- **Empty months get an empty state, not a blank grid.** Navigating to a month with no rows (e.g., August before its Pioneer export has been imported) shows a clear empty state with two calls to action: "Import CSV for this month" (v2) and "Add refill manually." The list simply ends where the data ends — the tool never fabricates or projects rows.
-- **Imports are date-driven, not month-bound.** An imported CSV may contain rows spanning month boundaries (a report pulled mid-July can include early-August due dates). Rows land in whatever month their `due_date` says; the import is not "assigned" to a month. This means importing "the August report" is just importing a file — no month setup step exists or is needed.
+- **Empty months get an empty state, not a blank grid.** Navigating to a month with no rows (e.g., August before its Pioneer export has been imported) shows a clear empty state with two calls to action: "Import a spreadsheet" (opens the import wizard — the file's own due dates decide where rows land) and "Add refill manually." The list simply ends where the data ends — the tool never fabricates or projects rows.
+- **Imports are date-driven, not month-bound.** An imported spreadsheet may contain rows spanning month boundaries (a report pulled mid-July can include early-August due dates). Rows land in whatever month their `due_date` says; the import is not "assigned" to a month. This means importing "the August report" is just importing a file — no month setup step exists or is needed.
 - **The Opportunities panel is aware of data horizon.** Alerts only consider rows that exist. If tomorrow's refills haven't been imported yet, there is nothing to alert on — which is correct behavior, but the panel should show a subtle hint when the look-ahead window extends past the last populated date (e.g., "No data beyond Jul 31 — import next month's report"), so an empty panel reads as "not loaded yet" rather than "nothing valuable due."
 - **Typical cadence (workflow assumption, not enforced):** near the start of each month, the technician exports the Pioneer report and imports it, populating that month in one step; stragglers are added manually. Nothing prevents multiple imports per month — upsert semantics (§5) make re-imports safe.
 
@@ -87,6 +87,7 @@ One row per refill attempt (per prescription per cycle).
 | rx_number               | TEXT NOT NULL                   | Displayed with one-click copy                                                                                   |
 | drug_id                 | INTEGER FK → drugs              |                                                                                                                 |
 | due_date                | DATE NOT NULL                   | From Pioneer's `Days Supply Ends On` on import, or manual entry. Drives month/day views and alerts              |
+| refills_left            | INTEGER                         | Refills remaining in the technician export; distinct from dormant `refills_filled` (refills used)              |
 | insurance_id            | INTEGER FK → insurances         |                                                                                                                 |
 | secondary_id            | INTEGER FK → secondary_coverages, NULL | Optional secondary coverage (coupon/copay-assistance programs). Grid column hidden by default, toggleable (technician decision 2026-07-11). Not in the initial migration — add via the M1 follow-up migration |
 | old_copay               | REAL NULL                       | Copay from the most recent (previous) fill. Import source: `Patient Paid Amount`                                |
@@ -146,7 +147,18 @@ Call notes carry one **behavior flag** (added 2026-07-15, same flags-not-names p
 
 The sheet's dropdowns prefix options with numbers (`0.`, `1.` …) purely to force ordering — that hack is replaced by the `sort_order` column; stored names carry no prefixes.
 
-`**settings**` — key/value store for: copay tier thresholds, alert look-ahead days (X), alert minimum profit (Y), Nimble Link aging alert days (seeded to 5, see §5), Req Follow Up wait days (`followup_wait_days`, seeded to 5 — a separate setting from the Nimble aging days even though they coincidentally match), last-used CSV column mapping (v2), database backup path.
+`**settings**` — key/value store for: copay tier thresholds, alert look-ahead days (X), alert minimum profit (Y), Nimble Link aging alert days (seeded to 5, see §5), Req Follow Up wait days (`followup_wait_days`, seeded to 5 — a separate setting from the Nimble aging days even though they coincidentally match), `import_column_mapping` (v2), database backup path.
+
+`**import_aliases**` — remembered Primary/Secondary export-name resolutions (v2 import):
+
+| column    | type                                                | notes                                                                 |
+| --------- | --------------------------------------------------- | --------------------------------------------------------------------- |
+| id        | INTEGER PK                                           |                                                                       |
+| kind      | TEXT NOT NULL CHECK ('insurance' \| 'secondary')     | the same raw text can resolve differently as Primary vs Secondary     |
+| raw_name  | TEXT NOT NULL COLLATE NOCASE                         | UNIQUE with kind; "EXPRESS SCRIPTS" and "Express Scripts" are one row |
+| target_id | INTEGER NULL                                         | NULL = remembered "leave blank" decision                              |
+
+Auto-matches and explicit blank choices are persisted alongside manual mappings. Integrity is app-level: deleting an unused insurance/secondary also deletes its aliases (same atomic batch), and aliases whose target no longer exists are filtered out at load and re-surface as unresolved.
 
 ### 4.4 Status
 
@@ -242,11 +254,12 @@ Append-only workflow log (added by migration 004, 2026-07-15; ADR 0002): `id, re
 
    In v1, insurance on rows is set manually from the dropdown; in v2, imports pre-fill it from the export's `Primary` column when that column is present (fill-blanks-only, like every imported field).
 
-### v2 — CSV Import
+### v2 — Spreadsheet Import (xlsx/CSV)
 
 - **Exports are column-configurable (§1).** The wizard maps whichever known columns are present in the file and ignores the rest; only `Rx Number` is strictly required. A file with no `Days Supply Ends On` column routes every row through the blank-due-date bulk-assignment path below — the import still works.
-- Import wizard: choose file → column-mapping step (tool proposes mappings for the known Pioneer headers; user can adjust; mapping persisted in settings) → preview with per-row disposition (new / update / skip) → commit.
-- Mapping targets: `Rx Number → rx_number`, `Dispensed Item Name → drug name`, `Dispensed Item NDC → drug ndc`, `Days Supply Ends On → due_date`, `Patient Paid Amount → old_copay`, `Net Profit → old_profit`, `Number Of Refills Filled → refills_filled`, `Primary → insurance`, `Secondary → secondary coverage` (matched against `secondary_coverages` with the same case-insensitive/surface-unmatched rules as Primary below).
+- Pioneer exports arrive as `.xlsx` files with Excel date cells; CSV remains accepted. The fixed technician contract is `Days Supply Ends On`, `Rx Number`, `Dispensed Item Name`, `Patient Paid Amount`, `Net Profit`, `Refills Remaining` (older samples said `Refills Left`; both are recognized), `Primary`, and `Secondary`; `Dispensed Item NDC` is deferred. Import is date-driven and never silently imports rows: choose file → map columns → resolve names → preview → one atomic commit.
+- Imports remember insurance and secondary resolutions in `import_aliases`, including automatic matches and blanks. Aliases are filtered when their target is stale, and deleting an unused insurance or secondary also deletes its aliases. A Settings UI for clearing aliases is a future option.
+- Mapping targets: `Rx Number → rx_number`, `Dispensed Item Name → drug name`, `Dispensed Item NDC → ignored/deferred`, `Days Supply Ends On → due_date`, `Patient Paid Amount → old_copay`, `Net Profit → old_profit`, `Refills Left → refills_left`, optional legacy `Number Of Refills Filled → refills_filled`, `Primary → insurance`, `Secondary → secondary coverage`.
 - **Primary → insurance matching is case-insensitive** (exports use `CVS CAREMARK`, `RIGHTWAY`; the insurances list has `CVS Caremark`, `RightWay`). Values that match no existing insurance (e.g. `VILLAGE RX LOCAL`, `Magellan` in real samples) surface in the preview for the technician to map to an existing insurance, create as a new one, or leave blank — never guessed silently.
 - Upsert semantics per §5. Rows with unparseable dates or missing Rx numbers go to a reviewable error list, never silently dropped.
 - **Probable-duplicate detection (due-date drift).** `Days Supply Ends On` can shift between overlapping exports for the same refill cycle, so exact `(rx_number, due_date)` matching alone would create duplicates. A parsed row whose Rx # matches an existing `Pending` row with a *nearby but different* due date is flagged in the preview as a probable duplicate with a warning; the technician chooses per row: update the existing row (adopting the new due date) or override and insert as a genuinely new row. Never silently inserted.

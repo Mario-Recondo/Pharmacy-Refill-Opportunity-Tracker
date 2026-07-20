@@ -57,6 +57,14 @@ Same app, but with the WebView2 remote-debugging port (9223) open so the
 screenshot the live app. Only needed when an agent should drive the UI;
 day-to-day development uses plain `pnpm tauri dev`.
 
+## Importing a spreadsheet
+
+Use the Month tab's **Import…** button for a Pioneer `.xlsx` or CSV export; the
+wizard maps columns, resolves insurance names (decisions are remembered for
+future imports), previews every row, and commits only after review, with rows
+landing by their own due dates. Nothing is ever imported silently, and imported
+values never overwrite fields the technician already filled in.
+
 ## Building the standalone executable
 
 ```powershell

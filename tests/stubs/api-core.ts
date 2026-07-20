@@ -3,9 +3,14 @@
 // emulate its all-or-nothing transaction against the in-memory DB.
 import { runBatchInTransaction } from "../helpers/fakeTauri";
 
+export const batchInvocations: { sql: string; params: unknown[] }[][] = [];
+export function resetBatchInvocations(): void { batchInvocations.length = 0; }
+
 export async function invoke(cmd: string, args?: Record<string, unknown>): Promise<unknown> {
   if (cmd === "execute_batch") {
-    runBatchInTransaction((args?.statements ?? []) as { sql: string; params: unknown[] }[]);
+    const statements = (args?.statements ?? []) as { sql: string; params: unknown[] }[];
+    batchInvocations.push(statements);
+    runBatchInTransaction(statements);
     return null;
   }
   throw new Error(`invoke("${cmd}") has no test stub`);

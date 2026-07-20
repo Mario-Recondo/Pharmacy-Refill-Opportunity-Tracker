@@ -298,7 +298,7 @@ interface Draft {
   new_copay: number | null;
   old_profit: number | null;
   new_profit: number | null;
-  refills_filled: number | null;
+  refills_left: number | null;
   refill_note_id: number | null;
   call_note_id: number | null;
   status: RefillStatus;
@@ -335,7 +335,7 @@ export default function RefillDrawer({ mode, lookups, profitMax, onClose, onRowE
     new_copay: null,
     old_profit: null,
     new_profit: null,
-    refills_filled: null,
+    refills_left: null,
     refill_note_id: null,
     call_note_id: null,
     status: "Pending",
@@ -511,7 +511,8 @@ export default function RefillDrawer({ mode, lookups, profitMax, onClose, onRowE
         new_copay: draft.new_copay,
         old_profit: draft.old_profit,
         new_profit: draft.new_profit,
-        refills_filled: draft.refills_filled,
+        refills_filled: null,
+        refills_left: draft.refills_left,
         refill_note_id: draft.refill_note_id,
         call_note_id: draft.call_note_id,
         status: draft.status,
@@ -807,19 +808,19 @@ export default function RefillDrawer({ mode, lookups, profitMax, onClose, onRowE
 
           <div className="field-pair">
             <label>
-              Refills filled
+              Refills left
               <input
                 key={editRow?.id ?? "create"}
-                defaultValue={values.refills_filled ?? ""}
+                defaultValue={values.refills_left ?? ""}
                 onBlur={(e) => {
                   const t = e.target.value.trim();
                   const n = t === "" ? null : Number(t);
                   if (n !== null && (!Number.isInteger(n) || n < 0)) {
-                    e.target.value = values.refills_filled == null ? "" : String(values.refills_filled);
+                    e.target.value = values.refills_left == null ? "" : String(values.refills_left);
                     return;
                   }
-                  if (editRow) void saveEditable("refills_filled", n);
-                  else setDraft((d) => ({ ...d, refills_filled: n }));
+                  if (editRow) void saveEditable("refills_left", n);
+                  else setDraft((d) => ({ ...d, refills_left: n }));
                 }}
                 onKeyDown={(e) => e.key === "Enter" && (e.target as HTMLInputElement).blur()}
               />

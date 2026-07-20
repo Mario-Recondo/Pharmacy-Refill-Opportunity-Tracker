@@ -1,5 +1,6 @@
 # Local working notes
 QUESTIONS.md
+INTERVIEW_PREP.md
 
 # MCP test-harness output (snapshots, screenshots, console logs)
 .playwright-mcp/
@@ -20,3 +21,6 @@ logs/
 !.vscode/extensions.json
 .idea/
 .DS_Store
+
+# Real PioneerRx exports (actual pharmacy data - never commit)
+/*.xlsx

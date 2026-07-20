@@ -11,7 +11,7 @@ import {
 
 const ROW_SELECT = `SELECT r.id, r.rx_number, r.drug_id, d.name AS drug_name, d.ndc, r.due_date,
         r.insurance_id, r.secondary_id, r.old_copay, r.new_copay, r.old_profit, r.new_profit,
-        r.refills_filled, r.refill_note_id, r.call_note_id, r.refill_note_set_at, r.call_note_set_at,
+        r.refills_filled, r.refills_left, r.refill_note_id, r.call_note_id, r.refill_note_set_at, r.call_note_set_at,
         r.status, r.notes
  FROM refills r JOIN drugs d ON d.id = r.drug_id`;
 
@@ -453,6 +453,7 @@ export interface NewRefill {
   old_profit: number | null;
   new_profit: number | null;
   refills_filled: number | null;
+  refills_left?: number | null;
   refill_note_id: number | null;
   call_note_id: number | null;
   status: RefillStatus;
@@ -471,12 +472,12 @@ async function doCreateRefill(input: NewRefill): Promise<number> {
   const callNoteSetAt = input.call_note_id != null ? nowIso : null;
   const res = await db.execute(
     `INSERT INTO refills (rx_number, drug_id, due_date, insurance_id, secondary_id,
-       old_copay, new_copay, old_profit, new_profit, refills_filled,
+       old_copay, new_copay, old_profit, new_profit, refills_filled, refills_left,
        refill_note_id, call_note_id, refill_note_set_at, call_note_set_at, status, notes, source)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, 'manual')`,
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, 'manual')`,
     [
       input.rx_number, input.drug_id, input.due_date, input.insurance_id, input.secondary_id,
-      input.old_copay, input.new_copay, input.old_profit, input.new_profit, input.refills_filled,
+      input.old_copay, input.new_copay, input.old_profit, input.new_profit, input.refills_filled, input.refills_left,
       input.refill_note_id, input.call_note_id, refillNoteSetAt, callNoteSetAt, input.status, input.notes,
     ],
   );
