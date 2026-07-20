@@ -5,16 +5,18 @@ import type { Lookups } from "./data/types";
 import MonthView, { type MonthNavRequest } from "./components/MonthView";
 import OverdueView from "./components/OverdueView";
 import ReqFollowUpView from "./components/ReqFollowUpView";
+import CallListView from "./components/CallListView";
 import SettingsView from "./components/SettingsView";
 import { checkForUpdateOnLaunch } from "./lib/updater";
 import "./App.css";
 
-type Tab = "month" | "followup" | "overdue" | "settings";
+type Tab = "month" | "calllist" | "followup" | "overdue" | "settings";
 
 function App() {
   const [lookups, setLookups] = useState<Lookups | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [tab, setTab] = useState<Tab>("month");
+  const [day, setDay] = useState(todayIso());
   // badge = actionable count (Pending past due, insurance not yet run); MISSED
   // rows are the permanent record and would grow the badge forever — see OverdueView
   const [overdueCount, setOverdueCount] = useState(0);
@@ -57,10 +59,11 @@ function App() {
   // day rollover while the app sits open: quiet-day counts and past-due status
   // both shift at midnight, so re-sweep and re-count without waiting for an edit
   useEffect(() => {
-    let day = todayIso();
+    let currentDay = todayIso();
     const timer = setInterval(() => {
-      if (todayIso() !== day) {
-        day = todayIso();
+      if (todayIso() !== currentDay) {
+        currentDay = todayIso();
+        setDay(currentDay);
         onDataChanged();
       }
     }, 60_000);
@@ -99,6 +102,9 @@ function App() {
         <button className={tab === "month" ? "tab on" : "tab"} onClick={() => setTab("month")}>
           Month
         </button>
+        <button className={tab === "calllist" ? "tab on" : "tab"} onClick={() => setTab("calllist")}>
+          Call List
+        </button>
         <button className={tab === "followup" ? "tab on" : "tab"} onClick={() => setTab("followup")}>
           Req Follow Up
           {followupCount > 0 && <span className="tab-badge">{followupCount}</span>}
@@ -116,6 +122,9 @@ function App() {
       </div>
       <div className={tab === "followup" ? "tab-page" : "tab-page off"}>
         <ReqFollowUpView lookups={lookups} active={tab === "followup"} onOpenInMonth={openInMonth} onDataChanged={onDataChanged} />
+      </div>
+      <div className={tab === "calllist" ? "tab-page" : "tab-page off"}>
+        <CallListView lookups={lookups} active={tab === "calllist"} today={day} onOpenInMonth={openInMonth} onDataChanged={onDataChanged} />
       </div>
       <div className={tab === "overdue" ? "tab-page" : "tab-page off"}>
         <OverdueView lookups={lookups} active={tab === "overdue"} onOpenInMonth={openInMonth} onDataChanged={onDataChanged} />

@@ -12,7 +12,7 @@ import {
 const ROW_SELECT = `SELECT r.id, r.rx_number, r.drug_id, d.name AS drug_name, d.ndc, r.due_date,
         r.insurance_id, r.secondary_id, r.old_copay, r.new_copay, r.old_profit, r.new_profit,
         r.refills_filled, r.refills_left, r.refill_note_id, r.call_note_id, r.refill_note_set_at, r.call_note_set_at,
-        r.status, r.notes
+        r.status, r.notes, r.added_to_call_list_on
  FROM refills r JOIN drugs d ON d.id = r.drug_id`;
 
 /** First day of the month after `ym` ("2026-07" → "2026-08-01"), for half-open date ranges. */
@@ -68,6 +68,51 @@ export async function loadOpportunities(fromIso: string, toIso: string, minProfi
 export function todayIso(): string {
   const d = new Date();
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
+/** Call List due-date window: today only; Mondays inherit the closed weekend. */
+export function callListWindow(todayIsoDate: string): { from: string; to: string } {
+  const [y, m, d] = todayIsoDate.split("-").map(Number);
+  const today = new Date(y, m - 1, d);
+  const from = today.getDay() === 1 ? new Date(y, m - 1, d - 2) : today;
+  const iso = (value: Date) => `${value.getFullYear()}-${String(value.getMonth() + 1).padStart(2, "0")}-${String(value.getDate()).padStart(2, "0")}`;
+  return { from: iso(from), to: todayIsoDate };
+}
+
+/** Client-side auto-membership check; keep this in lockstep with loadCallList's SQL arm. */
+export function autoQualifiesForCallList(row: RefillRow, today: string): boolean {
+  const window = callListWindow(today);
+  return row.status === "Pending" && row.new_copay != null && row.new_profit != null && row.new_profit >= 0 &&
+    row.refills_left != null && row.refills_left >= 1 && row.due_date >= window.from && row.due_date <= window.to;
+}
+
+/** Whether a call note timestamp falls on today's local calendar date. */
+export function isCalledToday(callNoteSetAtIso: string | null, today: string): boolean {
+  if (!callNoteSetAtIso) return false;
+  const d = new Date(callNoteSetAtIso);
+  const local = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  return local === today;
+}
+
+export async function loadCallList(today: string): Promise<RefillRow[]> {
+  const db = await getDb();
+  const { from, to } = callListWindow(today);
+  return db.select<RefillRow[]>(
+    `${ROW_SELECT}
+     WHERE (r.status = 'Pending' AND r.new_copay IS NOT NULL AND r.new_profit IS NOT NULL
+            AND r.new_profit >= 0 AND r.refills_left >= 1
+            AND r.due_date >= $1 AND r.due_date <= $2)
+        OR r.added_to_call_list_on = $3
+     ORDER BY (r.new_profit IS NULL), r.new_profit DESC, r.id`,
+    [from, to, today],
+  );
+}
+
+export function setCallListPin(id: number, dateIso: string | null): Promise<void> {
+  return serializeWrite(async () => {
+    const db = await getDb();
+    await db.execute("UPDATE refills SET added_to_call_list_on = $1, updated_at = datetime('now') WHERE id = $2", [dateIso, id]);
+  });
 }
 
 /**

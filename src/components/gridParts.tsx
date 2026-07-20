@@ -126,10 +126,12 @@ export function RowCtxMenu({
   menu,
   onDelete,
   onDismiss,
+  extraItems,
 }: {
   menu: CtxMenuState;
   onDelete: (row: RefillRow) => void;
   onDismiss: () => void;
+  extraItems?: Array<{ label: string; onClick: (row: RefillRow) => void }>;
 }) {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => e.key === "Escape" && onDismiss();
@@ -148,6 +150,11 @@ export function RowCtxMenu({
       <div className="ctx-menu-header">
         Rx {menu.row.rx_number} · {menu.row.drug_name}
       </div>
+      {extraItems?.map((item) => (
+        <button key={item.label} className="ctx-menu-item" onClick={() => item.onClick(menu.row)}>
+          {item.label}
+        </button>
+      ))}
       <button className="ctx-menu-item danger" onClick={() => onDelete(menu.row)}>
         Delete refill…
       </button>
