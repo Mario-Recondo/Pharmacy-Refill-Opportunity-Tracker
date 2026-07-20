@@ -129,12 +129,16 @@ body {
 /* ---- overdue tab (story 1.7) + req follow up tab ---- */
 
 .overdue-view,
-.followup-view {
+.followup-view,
+.calllist-view {
   flex: 1;
   min-height: 0;
   display: flex;
   flex-direction: column;
 }
+
+.callist-called { opacity: .45; }
+.callist-pinned { box-shadow: inset 3px 0 0 var(--ink); }
 
 .overdue-banner {
   padding: 8px 14px;

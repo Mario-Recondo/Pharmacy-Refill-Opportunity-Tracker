@@ -9,7 +9,7 @@ import {
   type GridReadyEvent,
   type RowClassParams,
 } from "ag-grid-community";
-import { loadMonth, loadMonthCounts } from "../data/refills";
+import { loadMonth, loadMonthCounts, setCallListPin, todayIso } from "../data/refills";
 import { STATUSES, type Lookups, type RefillRow, type RefillStatus } from "../data/types";
 import { confirmDeleteRefill, DROPDOWN_FIELDS, dueLabel, refillCols, useDueDateSort, useRefillCellEdit } from "./refillGrid";
 import { RowCtxMenu, type CtxMenuState, type GridCtx } from "./gridParts";
@@ -479,7 +479,21 @@ export default function MonthView({ lookups, active, navRequest, onDataChanged, 
       />
       </div>
 
-      {ctxMenu && <RowCtxMenu menu={ctxMenu} onDelete={deleteRow} onDismiss={() => setCtxMenu(null)} />}
+      {ctxMenu && (
+        <RowCtxMenu
+          menu={ctxMenu}
+          onDelete={deleteRow}
+          onDismiss={() => setCtxMenu(null)}
+          extraItems={[{
+            label: ctxMenu.row.added_to_call_list_on === todayIso() ? "Remove from today's call list" : "Add to today's call list",
+            onClick: (row) => {
+              setCallListPin(row.id, row.added_to_call_list_on === todayIso() ? null : todayIso())
+                .then(() => { setCtxMenu(null); loadMonth(ym).then(setRows); onDataChanged(); })
+                .catch((e) => alert(`Failed to update call list pin: ${e}`));
+            },
+          }]}
+        />
+      )}
       {importing && <ImportWizard lookups={lookups} visibleMonth={ym} onClose={() => setImporting(false)} onChanged={() => { setImporting(false); onLookupsChanged(); onDataChanged(); loadMonth(ym).then(setRows); loadMonthCounts().then(setMonthCounts); }} />}
 
       {drawer?.kind === "create" && (

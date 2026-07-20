@@ -197,6 +197,7 @@ pub fn run() {
             kind: MigrationKind::Up,
         },
         Migration { version: 7, description: "import", sql: include_str!("../migrations/007_import.sql"), kind: MigrationKind::Up },
+        Migration { version: 8, description: "call_list", sql: include_str!("../migrations/008_call_list.sql"), kind: MigrationKind::Up },
     ];
 
     tauri::Builder::default()

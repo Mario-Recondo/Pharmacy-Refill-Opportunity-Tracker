@@ -78,6 +78,7 @@ export interface RefillRow {
   call_note_id: number | null;
   refill_note_set_at: string | null; // ISO timestamp; drives the Nimble Link aging counter
   call_note_set_at: string | null; // ISO timestamp; the Req Follow Up "quiet days" clock
+  added_to_call_list_on: string | null;
   status: RefillStatus;
   notes: string | null;
 }
