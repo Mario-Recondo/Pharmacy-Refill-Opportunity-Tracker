@@ -55,48 +55,106 @@ fn normalize_cell(cell: &Data) -> serde_json::Value {
 
 fn normalize_xlsx_row(source: &[Data], rx_col: Option<usize>) -> Vec<serde_json::Value> {
     let mut row: Vec<_> = source.iter().map(normalize_cell).collect();
-    if let Some(i) = rx_col { if let Some(serde_json::Value::Number(n)) = row.get(i) { if let Some(v) = n.as_i64() { row[i] = json!(v.to_string()); } } }
+    if let Some(i) = rx_col {
+        if let Some(serde_json::Value::Number(n)) = row.get(i) {
+            if let Some(v) = n.as_i64() {
+                row[i] = json!(v.to_string());
+            }
+        }
+    }
     row
 }
 
 fn read_csv<R: Read>(reader: R) -> Result<ImportSheet, String> {
     let mut csv = csv::ReaderBuilder::new().flexible(true).from_reader(reader);
-    let headers: Vec<String> = csv.headers().map_err(|e| e.to_string())?.iter().enumerate().map(|(i,s)| if i == 0 { s.trim_start_matches('\u{feff}').trim().to_owned() } else { s.trim().to_owned() }).collect();
-    if headers.is_empty() || headers.iter().all(|s| s.is_empty()) { return Err("The spreadsheet has no headers".into()); }
+    let headers: Vec<String> = csv
+        .headers()
+        .map_err(|e| e.to_string())?
+        .iter()
+        .enumerate()
+        .map(|(i, s)| {
+            if i == 0 {
+                s.trim_start_matches('\u{feff}').trim().to_owned()
+            } else {
+                s.trim().to_owned()
+            }
+        })
+        .collect();
+    if headers.is_empty() || headers.iter().all(|s| s.is_empty()) {
+        return Err("The spreadsheet has no headers".into());
+    }
     let mut rows = Vec::new();
     for record in csv.records() {
         let record = record.map_err(|e| e.to_string())?;
-        if record.iter().all(|s| s.trim().is_empty()) { continue; }
+        if record.iter().all(|s| s.trim().is_empty()) {
+            continue;
+        }
         let mut row: Vec<serde_json::Value> = record.iter().map(|s| json!(s.trim())).collect();
-        if row.len() < headers.len() { row.resize(headers.len(), serde_json::Value::Null); }
-        if row.len() > headers.len() { row.push(json!({"__overflow": true})); }
+        if row.len() < headers.len() {
+            row.resize(headers.len(), serde_json::Value::Null);
+        }
+        if row.len() > headers.len() {
+            row.push(json!({"__overflow": true}));
+        }
         rows.push(row);
     }
-    if rows.is_empty() { return Err("The spreadsheet has no data rows".into()); }
+    if rows.is_empty() {
+        return Err("The spreadsheet has no data rows".into());
+    }
     Ok(ImportSheet { headers, rows })
 }
 
 #[tauri::command]
 fn read_spreadsheet(path: String) -> Result<ImportSheet, String> {
-    let extension = std::path::Path::new(&path).extension().and_then(|s| s.to_str()).unwrap_or("").to_ascii_lowercase();
-    if extension == "csv" { return read_csv(std::fs::File::open(&path).map_err(|e| e.to_string())?); }
-    if extension != "xlsx" && extension != "xls" { return Err("Choose an .xlsx, .xls, or .csv file".into()); }
+    let extension = std::path::Path::new(&path)
+        .extension()
+        .and_then(|s| s.to_str())
+        .unwrap_or("")
+        .to_ascii_lowercase();
+    if extension == "csv" {
+        return read_csv(std::fs::File::open(&path).map_err(|e| e.to_string())?);
+    }
+    if extension != "xlsx" && extension != "xls" {
+        return Err("Choose an .xlsx, .xls, or .csv file".into());
+    }
     let mut workbook = open_workbook_auto(&path).map_err(|e| e.to_string())?;
-    let name = workbook.sheet_names().first().cloned().ok_or("The workbook has no worksheets")?;
+    let name = workbook
+        .sheet_names()
+        .first()
+        .cloned()
+        .ok_or("The workbook has no worksheets")?;
     let range = workbook.worksheet_range(&name).map_err(|e| e.to_string())?;
     let mut iter = range.rows();
     let raw_headers = iter.next().ok_or("The workbook has no header row")?;
-    let headers: Vec<String> = raw_headers.iter().map(|c| match normalize_cell(c) { serde_json::Value::String(s) => s, v => v.to_string() }).map(|s| s.trim().to_owned()).collect();
-    if headers.is_empty() || headers.iter().all(|s| s.is_empty()) { return Err("The workbook has no headers".into()); }
-    let rx_col = headers.iter().position(|h| h.eq_ignore_ascii_case("Rx Number"));
+    let headers: Vec<String> = raw_headers
+        .iter()
+        .map(|c| match normalize_cell(c) {
+            serde_json::Value::String(s) => s,
+            v => v.to_string(),
+        })
+        .map(|s| s.trim().to_owned())
+        .collect();
+    if headers.is_empty() || headers.iter().all(|s| s.is_empty()) {
+        return Err("The workbook has no headers".into());
+    }
+    let rx_col = headers
+        .iter()
+        .position(|h| h.eq_ignore_ascii_case("Rx Number"));
     let mut rows = Vec::new();
     for source in iter {
-        if source.iter().all(|c| { let v = normalize_cell(c); v.is_null() || v.as_str().map(|s| s.is_empty()).unwrap_or(false) }) { continue; }
+        if source.iter().all(|c| {
+            let v = normalize_cell(c);
+            v.is_null() || v.as_str().map(|s| s.is_empty()).unwrap_or(false)
+        }) {
+            continue;
+        }
         let mut row = normalize_xlsx_row(source, rx_col);
         row.resize(headers.len(), serde_json::Value::Null);
         rows.push(row);
     }
-    if rows.is_empty() { return Err("The workbook has no data rows".into()); }
+    if rows.is_empty() {
+        return Err("The workbook has no data rows".into());
+    }
     Ok(ImportSheet { headers, rows })
 }
 
@@ -196,8 +254,18 @@ pub fn run() {
             sql: include_str!("../migrations/006_default_groups.sql"),
             kind: MigrationKind::Up,
         },
-        Migration { version: 7, description: "import", sql: include_str!("../migrations/007_import.sql"), kind: MigrationKind::Up },
-        Migration { version: 8, description: "call_list", sql: include_str!("../migrations/008_call_list.sql"), kind: MigrationKind::Up },
+        Migration {
+            version: 7,
+            description: "import",
+            sql: include_str!("../migrations/007_import.sql"),
+            kind: MigrationKind::Up,
+        },
+        Migration {
+            version: 8,
+            description: "call_list",
+            sql: include_str!("../migrations/008_call_list.sql"),
+            kind: MigrationKind::Up,
+        },
     ];
 
     tauri::Builder::default()
@@ -212,8 +280,8 @@ pub fn run() {
         )
         .invoke_handler(tauri::generate_handler![
             replace_database_and_restart,
-            execute_batch
-            , read_spreadsheet
+            execute_batch,
+            read_spreadsheet
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
@@ -225,9 +293,15 @@ mod tests {
 
     #[test]
     fn normalizes_cells_and_rx_column() {
-        assert_eq!(normalize_cell(&Data::DateTimeIso("2026-07-01".into())), json!("2026-07-01"));
+        assert_eq!(
+            normalize_cell(&Data::DateTimeIso("2026-07-01".into())),
+            json!("2026-07-01")
+        );
         assert_eq!(normalize_cell(&Data::Float(3.0)), json!(3));
-        assert_eq!(normalize_cell(&Data::String("  Plan  ".into())), json!("Plan"));
+        assert_eq!(
+            normalize_cell(&Data::String("  Plan  ".into())),
+            json!("Plan")
+        );
         assert_eq!(normalize_cell(&Data::Empty), serde_json::Value::Null);
         let row = normalize_xlsx_row(&[Data::Float(428566.0), Data::Float(25.5)], Some(0));
         assert_eq!(row[0], json!("428566"));
@@ -246,7 +320,10 @@ mod tests {
 
     #[test]
     fn reads_csv_bom_quotes_padding_and_overflow() {
-        let sheet = read_csv("\u{feff}Rx Number,Drug\r\n123,\"Test, Drug\"\r\n456\r\n789,Drug,EXTRA\r\n".as_bytes()).unwrap();
+        let sheet = read_csv(
+            "\u{feff}Rx Number,Drug\r\n123,\"Test, Drug\"\r\n456\r\n789,Drug,EXTRA\r\n".as_bytes(),
+        )
+        .unwrap();
         assert_eq!(sheet.headers, vec!["Rx Number", "Drug"]);
         assert_eq!(sheet.rows[0], vec![json!("123"), json!("Test, Drug")]);
         assert_eq!(sheet.rows[1][1], serde_json::Value::Null);

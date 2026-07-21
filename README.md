@@ -146,7 +146,7 @@ From the repo root:
 pnpm test
 ```
 
-Runs the whole suite once — about half a second, roughly 70 tests. No app, no
+Runs the whole suite once — about half a second, 138 tests. No app, no
 dev server, and no Rust build needed: the tests run the data layer's real SQL
 against an **in-memory SQLite** built from the actual migration files in
 `src-tauri/migrations/`, so your development database is never touched. The
@@ -164,6 +164,22 @@ pnpm vitest -t "settling"        # only tests whose name matches, in watch mode
 The suite covers the business rules (tab membership, the event settling window,
 the follow-up sweep, copay tiers, date math). UI rendering and native dialogs
 are deliberately not covered here — those are verified in the running app.
+
+### Checking immutable migrations
+
+Migration files already present on the base branch are append-only: never edit,
+delete, rename, or re-hash one. Add the next sequential migration and its exact
+raw-byte SHA-256 entry to `src-tauri/migrations/migration-lock.json` instead.
+
+```powershell
+pnpm check:migrations
+pnpm test:migration-guard
+node scripts/check-migrations.mjs --baseline-commit <exact-40-character-commit-oid>
+```
+
+The first command checks the current files against their manifest. The last
+command also proves that every migration locked by the exact base commit is
+unchanged; only correctly numbered migrations appended after that base may pass.
 
 ## Other useful commands
 

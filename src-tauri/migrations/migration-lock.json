@@ -1,0 +1,45 @@
+{
+  "schemaVersion": 1,
+  "migrations": [
+    {
+      "version": 1,
+      "filename": "001_initial_schema.sql",
+      "sha256": "e450875ea372fdd3b7e5e2a0cefd00552ec92514063513952d43fa0eaccba12c"
+    },
+    {
+      "version": 2,
+      "filename": "002_seed_lookups.sql",
+      "sha256": "e8318a2dc7f52ef8790c5dc75b1eae89d1450058f13ad39cc794ecab91b73fd0"
+    },
+    {
+      "version": 3,
+      "filename": "003_sketch_feedback.sql",
+      "sha256": "4d20cf8153c6436e0f3630531e42ff656f02a62cb2fd181be4af6b7a999c29fe"
+    },
+    {
+      "version": 4,
+      "filename": "004_req_followup.sql",
+      "sha256": "e327cc266e73f7b4f1a708e2431a00c466a0327912b9d65e65f304d19cc384cf"
+    },
+    {
+      "version": 5,
+      "filename": "005_drugs_null_ndc_unique.sql",
+      "sha256": "8793a963f178b3c7239fc989b2038f1290cd74540ca7d32fc5aba258cf3ad24c"
+    },
+    {
+      "version": 6,
+      "filename": "006_default_groups.sql",
+      "sha256": "ba3d092410bcf173b25152c45566ca55dd7abd1ccc222267e77a4f9753440a05"
+    },
+    {
+      "version": 7,
+      "filename": "007_import.sql",
+      "sha256": "37c5c42c6c13432b84308ca9a62dac5bb2fa5276f87d21fd9042c3723a3b2cb3"
+    },
+    {
+      "version": 8,
+      "filename": "008_call_list.sql",
+      "sha256": "f1f304d7f5d2beb6661609eed89f86e9d707a29f5e7f49cd0a0bab8756a6dcd9"
+    }
+  ]
+}

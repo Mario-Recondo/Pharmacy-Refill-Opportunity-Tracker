@@ -1,0 +1,90 @@
+name: Quality
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: quality-${{ github.workflow }}-${{ github.event_name }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  quality:
+    runs-on: windows-latest
+    steps:
+      - name: Check out repository history
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24.13.0
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.0
+          run_install: false
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: 1.97.0
+          components: rustfmt, clippy
+
+      - name: Install JavaScript dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Test migration guard
+        run: pnpm test:migration-guard
+
+      - name: Check current migration lock
+        run: pnpm check:migrations
+
+      - name: Check migrations against pull-request base
+        if: github.event_name == 'pull_request'
+        shell: pwsh
+        run: |
+          $base = '${{ github.event.pull_request.base.sha }}'
+          if ($base -notmatch '^[0-9a-fA-F]{40}$' -or $base -match '^0{40}$') {
+            throw "GitHub did not provide a valid exact pull-request base commit."
+          }
+          node scripts/check-migrations.mjs --baseline-commit $base
+
+      - name: Check migrations against push base
+        if: github.event_name == 'push'
+        shell: pwsh
+        run: |
+          $before = '${{ github.event.before }}'
+          if ($before -notmatch '^[0-9a-fA-F]{40}$' -or $before -match '^0{40}$') {
+            throw "GitHub did not provide a valid exact pre-push commit."
+          }
+          node scripts/check-migrations.mjs --baseline-commit $before
+
+      - name: Report manual migration-check scope
+        if: github.event_name == 'workflow_dispatch'
+        shell: pwsh
+        run: Write-Host "Manual dispatch validates the current migration tree; no comparison base was supplied."
+
+      - name: Run frontend and data tests
+        run: pnpm test
+
+      - name: Build frontend
+        run: pnpm build
+
+      - name: Check Rust formatting
+        run: cargo fmt --manifest-path src-tauri/Cargo.toml -- --check
+
+      - name: Run Rust tests
+        run: cargo test --manifest-path src-tauri/Cargo.toml --locked
+
+      - name: Run strict Clippy
+        run: cargo clippy --manifest-path src-tauri/Cargo.toml --locked --all-targets -- -D warnings

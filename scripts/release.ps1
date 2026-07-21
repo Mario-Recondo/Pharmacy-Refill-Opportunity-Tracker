@@ -3,6 +3,9 @@ param([string]$Notes)
 $ErrorActionPreference = "Stop"
 Set-Location (Join-Path $PSScriptRoot "..")
 
+node scripts/check-migrations.mjs
+if ($LASTEXITCODE -ne 0) { throw "Migration-lock preflight failed with exit code $LASTEXITCODE." }
+
 $config = Get-Content -Raw "src-tauri/tauri.conf.json" | ConvertFrom-Json
 $v = [string]$config.version
 $packageVersion = [string](Get-Content -Raw "package.json" | ConvertFrom-Json).version
