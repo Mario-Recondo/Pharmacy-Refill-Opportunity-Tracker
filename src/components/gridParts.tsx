@@ -19,6 +19,7 @@ export interface PillItem {
   label: string;
   color?: string;
   meaning?: string;
+  clear?: boolean;
 }
 
 // ---------------------------------------------------------------------------
@@ -33,7 +34,7 @@ export function PillSelectEditor(props: CustomCellEditorProps<RefillRow>) {
     allowClear: boolean;
   };
   const choices: PillItem[] = allowClear
-    ? [{ value: null, label: "— clear —", color: "#f5f5f5" }, ...items]
+    ? [{ value: null, label: "— clear —", clear: true }, ...items]
     : items;
   const [highlight, setHighlight] = useState(() =>
     Math.max(0, choices.findIndex((c) => c.value === props.value)),
@@ -70,7 +71,7 @@ export function PillSelectEditor(props: CustomCellEditorProps<RefillRow>) {
       {choices.map((c, i) => (
         <div
           key={String(c.value)}
-          className={`pill-option${i === highlight ? " highlight" : ""}${c.value === props.value ? " current" : ""}`}
+          className={`pill-option${c.clear ? " clear" : ""}${i === highlight ? " highlight" : ""}${c.value === props.value ? " current" : ""}`}
           style={c.color ? { background: c.color, color: textColorFor(c.color) } : undefined}
           title={c.meaning || undefined}
           onMouseEnter={() => setHighlight(i)}

@@ -182,7 +182,7 @@ export function refillCols(lookups: Lookups, opts: RefillColOpts) {
       valueFormatter: lookupName(lookups.callNotes),
       cellStyle: (p) => {
         if (!noteQualifiesForCallNote(p.data?.refill_note_id, lookups)) {
-          return { backgroundColor: "#f2f2f2", color: "#bbb" };
+          return { backgroundColor: "var(--disabled-bg)", color: "var(--disabled-text)" };
         }
         return lookupCell(lookups.callNotes)(p);
       },

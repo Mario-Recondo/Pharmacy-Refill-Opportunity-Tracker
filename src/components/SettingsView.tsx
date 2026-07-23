@@ -44,6 +44,11 @@ interface SettingsProps {
   onChanged: () => void;
 }
 
+interface SettingsViewProps extends SettingsProps {
+  darkMode: boolean;
+  onDarkModeChange: (darkMode: boolean) => boolean;
+}
+
 type SectionKey = "insurances" | "secondary" | "refillNotes" | "callNotes" | "thresholds" | "backup" | "about";
 
 const SECTIONS: { key: SectionKey; label: string }[] = [
@@ -715,9 +720,13 @@ function BackupSection({ lookups, onChanged }: SettingsProps) {
   );
 }
 
-function AboutSection() {
+function AboutSection({
+  darkMode,
+  onDarkModeChange,
+}: Pick<SettingsViewProps, "darkMode" | "onDarkModeChange">) {
   const [version, setVersion] = useState("");
   const [busy, setBusy] = useState(false);
+  const [themeError, setThemeError] = useState("");
 
   useEffect(() => {
     getVersion().then(setVersion).catch(console.error);
@@ -732,8 +741,37 @@ function AboutSection() {
     }
   };
 
+  const changeDarkMode = (enabled: boolean) => {
+    setThemeError(
+      onDarkModeChange(enabled)
+        ? ""
+        : "The theme changed for this session, but the preference could not be remembered.",
+    );
+  };
+
   return (
     <div>
+      <h3 className="s-sub">Appearance</h3>
+      <div className="theme-setting">
+        <div>
+          <div className="theme-setting-title">Dark mode</div>
+          <p className="s-hint">Use charcoal surfaces to reduce glare.</p>
+        </div>
+        <label className="theme-toggle">
+          <input
+            type="checkbox"
+            role="switch"
+            checked={darkMode}
+            onChange={(e) => changeDarkMode(e.target.checked)}
+          />
+          <span className="theme-toggle-track" aria-hidden="true">
+            <span className="theme-toggle-knob" />
+          </span>
+          <span>{darkMode ? "On" : "Off"}</span>
+        </label>
+      </div>
+      {themeError && <p className="s-error">{themeError}</p>}
+
       <h3 className="s-sub">Refill Tracker</h3>
       <p className="s-hint">Version {version ? `v${version}` : "…"}</p>
       <p>
@@ -748,7 +786,12 @@ function AboutSection() {
 
 // ---------------------------------------------------------------------------
 
-export default function SettingsView({ lookups, onChanged }: SettingsProps) {
+export default function SettingsView({
+  lookups,
+  onChanged,
+  darkMode,
+  onDarkModeChange,
+}: SettingsViewProps) {
   const [section, setSection] = useState<SectionKey>("insurances");
   return (
     <div className="settings">
@@ -792,7 +835,9 @@ export default function SettingsView({ lookups, onChanged }: SettingsProps) {
         )}
         {section === "thresholds" && <ThresholdsSection lookups={lookups} onChanged={onChanged} />}
         {section === "backup" && <BackupSection lookups={lookups} onChanged={onChanged} />}
-        {section === "about" && <AboutSection />}
+        {section === "about" && (
+          <AboutSection darkMode={darkMode} onDarkModeChange={onDarkModeChange} />
+        )}
       </div>
     </div>
   );
