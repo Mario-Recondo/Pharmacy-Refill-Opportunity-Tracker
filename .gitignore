@@ -1,6 +1,7 @@
 # Local working notes
 QUESTIONS.md
 INTERVIEW_PREP.md
+Refinements/
 
 # MCP test-harness output (snapshots, screenshots, console logs)
 .playwright-mcp/
