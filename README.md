@@ -204,5 +204,6 @@ extensions.
 
 ## Contributing workflow
 
-New work goes on a feature branch → push → pull request; `main` is never committed
-to directly. Design decisions are folded into `Design_docs/` as they are made.
+New work goes on a feature branch; `main` is never committed to directly. Commits,
+pushes, pull requests, merges, and releases are performed only with explicit user
+authorization. Design decisions are folded into `Design_docs/` as they are made.
