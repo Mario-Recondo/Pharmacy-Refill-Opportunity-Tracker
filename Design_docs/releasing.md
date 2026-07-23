@@ -4,6 +4,10 @@ The release flow publishes a signed NSIS installer and `latest.json` to the
 public releases-only repository. Run it from PowerShell in a clean working
 copy after merging the intended changes to `main`.
 
+This runbook describes user-authorized release work. An agent must not merge,
+publish, create a release, or run `scripts/release.ps1` without explicit user
+authorization for that external action.
+
 Prerequisites:
 
 - The private key exists at `$env:USERPROFILE\.tauri\refill-tracker.key`, its
