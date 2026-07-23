@@ -206,6 +206,17 @@ Acceptance criteria (finalized 2026-07-14):
 - Secondary coverages carry a direct per-row logo (no groups); Coupon ships with the coupon logo.
 - Logo images are bundled into the exe (offline, single-exe constraint).
 
+**4.6 — Reduce glare with dark mode**
+As a technician, I want an optional dark appearance, so that the app is easier on my eyes without changing the visual language I use to scan refill data.
+
+Acceptance criteria (decided 2026-07-23):
+- Settings → About contains one Dark mode toggle; there is no automatic system-theme mode.
+- Existing users default to the current light appearance, while an explicit choice is remembered after closing and reopening the app.
+- Dark mode uses charcoal and dark-grey chrome across every app-owned surface, including grids, drawers, menus, forms, the import wizard, and loading/error states.
+- Copay tiers, refill/call-note colors, status colors, and profit shading keep their established colors in both modes.
+- Insurance and secondary-coverage logos are unchanged. Operating-system dialogs continue to follow Windows.
+- The appearance changes immediately without a Save button.
+
 ---
 
 ## Epic 5: CSV Import (v2)

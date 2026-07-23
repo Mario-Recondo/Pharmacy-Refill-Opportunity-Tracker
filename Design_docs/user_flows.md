@@ -159,9 +159,11 @@ The month-rollover ritual, replacing "clone the tab."
 
 **7b. Threshold tuning:** Settings → edit copay tier boundaries or alert X/Y → grid recolors and Opportunities panel recomputes immediately.
 
-**7c. Backup:** Settings → **Back up** → choose folder → timestamped copy of the `.db` file written. Recommended habit: monthly, right after import.
+**7c. Appearance:** Settings → About → toggle Dark mode → all app-owned surfaces switch immediately. The choice survives restart; business-coded data colors and insurance logos do not change.
 
-**7d. Restore:** Settings → **Restore** → choose backup file → explicit confirmation ("replaces ALL current data") → app reloads on restored data.
+**7d. Backup:** Settings → **Back up** → choose folder → timestamped copy of the `.db` file written. Recommended habit: monthly, right after import.
+
+**7e. Restore:** Settings → **Restore** → choose backup file → explicit confirmation ("replaces ALL current data") → app reloads on restored data.
 
 ---
 

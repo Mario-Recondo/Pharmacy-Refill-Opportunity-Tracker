@@ -12,14 +12,22 @@ body,
    green = money only (profits, Opportunities) — defined where used
    urgent = overdue badge + destructive chrome                              */
 :root {
+  color-scheme: light;
   --ink: #1d3557;
   --ink-hi: #2c4e7e;      /* hover on ink surfaces */
   --ink-tint: #e9eff6;    /* active/selected backgrounds */
   --paper: #f4f5f3;       /* app background behind the white work surface */
+  --surface: #fff;
+  --surface-raised: #fff;
+  --surface-muted: #f5f5f5;
+  --surface-hover: #f1f4f8;
+  --control-bg: #fff;
   --line: #d9dee4;        /* chrome borders */
   --line-strong: #c3cbd4; /* control borders */
   --text: #1c232e;
   --dim: #5b6572;
+  --disabled-bg: #f2f2f2;
+  --disabled-text: #bbb;
   --urgent: #c1352b;
   --urgent-tint: #fbeae8;
 }
@@ -1356,3 +1364,409 @@ textarea:focus-visible {
 .import-table { border: 1px solid #ddd; margin: 1rem 0; max-height: 45vh; overflow: auto; }
 .import-table > div { display: grid; grid-template-columns: 55px 120px 170px 1fr; gap: .5rem; padding: .35rem; border-bottom: 1px solid #eee; align-items: center; }
 .bulk-fix { display: flex; gap: .6rem; align-items: center; flex-wrap: wrap; margin: 1rem 0; }
+
+/* ---- appearance toggle -------------------------------------------------- */
+
+.theme-setting {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  max-width: 520px;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface-muted);
+}
+
+.theme-setting-title {
+  font-size: 13.5px;
+  font-weight: 600;
+}
+
+.theme-setting .s-hint {
+  margin-bottom: 0;
+}
+
+.theme-toggle {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 0 0 auto;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.theme-toggle input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+}
+
+.theme-toggle-track {
+  position: relative;
+  width: 38px;
+  height: 22px;
+  border: 1px solid var(--line-strong);
+  border-radius: 999px;
+  background: var(--disabled-bg);
+  transition: background-color 120ms ease, border-color 120ms ease;
+}
+
+.theme-toggle-knob {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--surface-raised);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, .3);
+  transition: transform 120ms ease;
+}
+
+.theme-toggle input:checked + .theme-toggle-track {
+  border-color: var(--ink);
+  background: var(--ink);
+}
+
+.theme-toggle input:checked + .theme-toggle-track .theme-toggle-knob {
+  transform: translateX(16px);
+}
+
+.theme-toggle input:focus-visible + .theme-toggle-track {
+  outline: 2px solid var(--ink);
+  outline-offset: 2px;
+}
+
+/* ---- dark appearance ---------------------------------------------------- */
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --ink: #7fa3c8;
+  --ink-hi: #94b5d5;
+  --ink-tint: #303c49;
+  --paper: #1b1f24;
+  --surface: #24292f;
+  --surface-raised: #2b3138;
+  --surface-muted: #2d333a;
+  --surface-hover: #343b43;
+  --control-bg: #20252b;
+  --line: #3b424b;
+  --line-strong: #4c5662;
+  --text: #e3e7eb;
+  --dim: #a9b1ba;
+  --disabled-bg: #30363d;
+  --disabled-text: #7e8791;
+  --urgent: #e06a61;
+  --urgent-tint: #3b2728;
+}
+
+:root[data-theme="dark"] body {
+  background: var(--paper);
+  color: var(--text);
+}
+
+:root[data-theme="dark"] :is(button, input, select, textarea) {
+  color-scheme: dark;
+}
+
+:root[data-theme="dark"] .tabs {
+  background: #202830;
+  border-bottom: 1px solid #35404b;
+}
+
+:root[data-theme="dark"] .brand-mark,
+:root[data-theme="dark"] .tab.on {
+  background: #e7ebef;
+  color: #26384a;
+}
+
+:root[data-theme="dark"] .tab {
+  color: #b8c4d0;
+}
+
+:root[data-theme="dark"] .tab:hover {
+  color: #fff;
+  background: rgba(255, 255, 255, .1);
+}
+
+:root[data-theme="dark"] :is(
+  .toolbar,
+  .opps,
+  .opps-rail,
+  .drawer,
+  .drug-options,
+  .ctx-menu,
+  .s-menu,
+  .import-wizard
+) {
+  background: var(--surface);
+  color: var(--text);
+}
+
+:root[data-theme="dark"] :is(
+  .call-list-ghost,
+  .opp-card,
+  .history-row,
+  .drawer-footer,
+  .ctx-menu-header,
+  .s-group-head,
+  .theme-setting
+) {
+  background: var(--surface-muted);
+  color: var(--text);
+}
+
+:root[data-theme="dark"] :is(
+  .toolbar,
+  .opps,
+  .opps-header,
+  .drawer,
+  .drawer-header,
+  .drawer-footer,
+  .history,
+  .activity,
+  .ctx-menu,
+  .ctx-menu-header,
+  .s-sidebar,
+  .s-menu,
+  .import-table,
+  .import-table > div
+) {
+  border-color: var(--line);
+}
+
+:root[data-theme="dark"] :is(
+  .toolbar button,
+  .toolbar select,
+  .opps-collapse,
+  .opp-actions button,
+  .drawer input,
+  .drawer select,
+  .drawer textarea,
+  .drug-option,
+  .dup-actions button,
+  .ctx-menu-item,
+  .drawer-footer button,
+  .s-name-input,
+  .s-add input,
+  .s-number input,
+  .s-tier-max,
+  .s-danger,
+  .import-column select,
+  .import-name select
+) {
+  border-color: var(--line-strong);
+  background: var(--control-bg);
+  color: var(--text);
+}
+
+:root[data-theme="dark"] :is(
+  .toolbar button:hover,
+  .toolbar select:hover,
+  .opps-rail:hover,
+  .opps-collapse:hover,
+  .drug-option:hover,
+  .drug-option:focus,
+  .ctx-menu-item:hover,
+  .s-nav:hover,
+  .s-row:hover,
+  .s-name:hover,
+  .s-kebab-btn:hover,
+  .s-menu-item:hover
+) {
+  background: var(--surface-hover);
+}
+
+:root[data-theme="dark"] .opp-card:hover {
+  background: #28372d;
+}
+
+:root[data-theme="dark"] .opp-actions button:hover {
+  background: #293b2e;
+}
+
+:root[data-theme="dark"] :is(
+  .row-count,
+  .opps-rail-label,
+  .opps-params,
+  .opps-empty,
+  .opps-horizon,
+  .empty-month,
+  .drawer-subtitle,
+  .drawer label,
+  .drawer .field-hint,
+  .drug-ndc,
+  .drug-empty,
+  .history h3,
+  .activity h3,
+  .activity-date,
+  .history-empty,
+  .history-line,
+  .history-notes,
+  .ctx-menu-header,
+  .s-hint,
+  .s-path,
+  .s-group-title,
+  .s-empty,
+  .s-suffix,
+  .s-updown button,
+  .s-kebab-btn,
+  .s-nologo,
+  .s-flags,
+  .s-divider,
+  .s-tier-label,
+  .import-progress,
+  .import-name small
+) {
+  color: var(--dim);
+}
+
+:root[data-theme="dark"] :is(
+  .opp-rx,
+  .opp-due,
+  .empty-month h2,
+  .drawer-close:hover,
+  .activity-label,
+  .s-nav,
+  .s-kebab-btn:hover
+) {
+  color: var(--text);
+}
+
+:root[data-theme="dark"] .s-nav.on {
+  background: var(--ink-tint);
+  color: #bed5ec;
+}
+
+:root[data-theme="dark"] .s-primary,
+:root[data-theme="dark"] .toolbar button.add-refill,
+:root[data-theme="dark"] .drawer-footer button.primary {
+  background: #496b8d;
+  border-color: #496b8d;
+  color: #fff;
+}
+
+:root[data-theme="dark"] .s-primary:hover:not(:disabled),
+:root[data-theme="dark"] .toolbar button.add-refill:hover,
+:root[data-theme="dark"] .drawer-footer button.primary:hover {
+  background: #587da1;
+  border-color: #587da1;
+}
+
+:root[data-theme="dark"] .s-primary:disabled,
+:root[data-theme="dark"] .drawer-footer button.primary:disabled {
+  background: var(--disabled-bg);
+  border-color: var(--line);
+  color: var(--disabled-text);
+}
+
+:root[data-theme="dark"] :is(
+  .toolbar .clear-filters,
+  .dup-actions button,
+  .ctx-menu-item.danger,
+  .drawer-footer button.delete,
+  .s-danger,
+  .s-menu-item.danger
+) {
+  border-color: #87504b;
+  color: var(--urgent);
+}
+
+:root[data-theme="dark"] :is(
+  .dup-actions button:hover,
+  .ctx-menu-item.danger:hover,
+  .drawer-footer button.delete:hover,
+  .s-danger:hover:not(:disabled),
+  .s-menu-item.danger:hover
+) {
+  background: var(--urgent-tint);
+}
+
+:root[data-theme="dark"] .drawer select:disabled {
+  background: var(--disabled-bg);
+  color: var(--disabled-text);
+}
+
+:root[data-theme="dark"] .overdue-banner {
+  border-color: #5c4a2b;
+  background: #382f20;
+  color: #e5c27b;
+}
+
+:root[data-theme="dark"] .opps-horizon,
+:root[data-theme="dark"] .notes-bubble {
+  border-color: #665831;
+  background: #383221;
+  color: #dfcf91;
+}
+
+:root[data-theme="dark"] .dup-warning,
+:root[data-theme="dark"] .import-error {
+  border-color: #74423e;
+  background: #3b2728;
+  color: #f0aaa3;
+}
+
+:root[data-theme="dark"] .drug-create {
+  background: #26352a;
+}
+
+:root[data-theme="dark"] .drug-option.create {
+  color: #8bc596;
+}
+
+:root[data-theme="dark"] .drug-create button {
+  border-color: #4f8559;
+  background: #2a3c2e;
+  color: #9bcfa5;
+}
+
+:root[data-theme="dark"] .pill-editor {
+  border-color: var(--line-strong);
+  background: var(--surface-raised);
+  color: var(--text);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, .45);
+}
+
+:root[data-theme="dark"] .pill-option {
+  border-color: rgba(255, 255, 255, .08);
+}
+
+.pill-option.clear {
+  background: var(--surface-muted);
+  color: var(--text);
+}
+
+:root[data-theme="dark"] .ag-row.opp-hover {
+  background-color: #4b4129 !important;
+  box-shadow: inset 0 0 0 2px #c89b2a;
+}
+
+:root[data-theme="dark"] .ag-row.drawer-open {
+  background-color: var(--ink-tint) !important;
+  box-shadow: inset 0 0 0 2px var(--ink);
+}
+
+:root[data-theme="dark"] .nimble-days:not(.stale) {
+  background: rgba(25, 29, 34, .82);
+  color: #f0f2f4;
+}
+
+:root[data-theme="dark"] .s-menu {
+  box-shadow: 0 8px 22px rgba(0, 0, 0, .45);
+}
+
+:root[data-theme="dark"] .import-scrim {
+  background: rgba(5, 7, 9, .72);
+}
+
+:root[data-theme="dark"] .import-wizard {
+  background: var(--surface);
+  color: var(--text);
+  box-shadow: 0 18px 60px rgba(0, 0, 0, .6);
+}

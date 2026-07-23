@@ -8,14 +8,20 @@ import ReqFollowUpView from "./components/ReqFollowUpView";
 import CallListView from "./components/CallListView";
 import SettingsView from "./components/SettingsView";
 import { checkForUpdateOnLaunch } from "./lib/updater";
+import { applyTheme, saveThemePreference, type AppTheme } from "./lib/theme";
 import "./App.css";
 
 type Tab = "month" | "calllist" | "followup" | "overdue" | "settings";
 
-function App() {
+interface AppProps {
+  initialTheme?: AppTheme;
+}
+
+function App({ initialTheme = "light" }: AppProps) {
   const [lookups, setLookups] = useState<Lookups | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [tab, setTab] = useState<Tab>("month");
+  const [theme, setTheme] = useState<AppTheme>(initialTheme);
   const [day, setDay] = useState(todayIso());
   // badge = actionable count (Pending past due, insurance not yet run); MISSED
   // rows are the permanent record and would grow the badge forever — see OverdueView
@@ -34,6 +40,13 @@ function App() {
   // view and reload-on-activation covers grid data (design doc §6.6)
   const reloadLookups = useCallback(() => {
     loadLookups().then(setLookups).catch((e) => alert(`Reloading settings failed.\n${e}`));
+  }, []);
+
+  const changeTheme = useCallback((darkMode: boolean): boolean => {
+    const nextTheme: AppTheme = darkMode ? "dark" : "light";
+    applyTheme(nextTheme);
+    setTheme(nextTheme);
+    return saveThemePreference(nextTheme);
   }, []);
 
   const waitDays = lookups?.settings.followupWaitDays ?? 5;
@@ -130,7 +143,12 @@ function App() {
         <OverdueView lookups={lookups} active={tab === "overdue"} onOpenInMonth={openInMonth} onDataChanged={onDataChanged} />
       </div>
       <div className={tab === "settings" ? "tab-page" : "tab-page off"}>
-        <SettingsView lookups={lookups} onChanged={reloadLookups} />
+        <SettingsView
+          lookups={lookups}
+          onChanged={reloadLookups}
+          darkMode={theme === "dark"}
+          onDarkModeChange={changeTheme}
+        />
       </div>
     </div>
   );
