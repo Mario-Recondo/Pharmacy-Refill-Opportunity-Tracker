@@ -22,6 +22,10 @@ import { copayColor, formatMoney, profitStyle, textColorFor } from "../lib/color
 import { confirmDestructive } from "../lib/confirmDialog";
 import { insuranceDisplayName, noteQualifiesForCallNote } from "../lib/rules";
 import {
+  parseMoneyEdit,
+  parseNonNegativeIntegerEdit,
+} from "../lib/gridValidation";
+import {
   InsuranceRenderer,
   PillSelectEditor,
   RefillNoteRenderer,
@@ -59,10 +63,6 @@ export function sortItems(items: PillItem[]): PillItem[] {
   return [...items].sort((a, b) => String(a.label).localeCompare(String(b.label), undefined, { sensitivity: "base" }));
 }
 
-// dropdown cells open on a single click (technician feedback, 2026-07-11);
-// text/numeric cells keep double-click so a stray click doesn't start an edit
-export const DROPDOWN_FIELDS = new Set(["insurance_id", "secondary_id", "refill_note_id", "call_note_id", "status"]);
-
 export interface RefillColOpts {
   /** story 1.9: the Nimble Link day counter renders only in the month grid */
   nimbleCounter: boolean;
@@ -76,12 +76,8 @@ export function refillCols(lookups: Lookups, opts: RefillColOpts) {
   };
   const lookupName = (list: Lookup[]) => (p: ValueFormatterParams<RefillRow>) =>
     list.find((l) => l.id === p.value)?.name ?? "";
-  const moneyParser = (p: ValueParserParams<RefillRow>) => {
-    const t = String(p.newValue ?? "").replace(/[$,\s]/g, "");
-    if (t === "") return null;
-    const n = Number(t);
-    return Number.isFinite(n) ? n : p.oldValue;
-  };
+  const moneyParser = (p: ValueParserParams<RefillRow>) =>
+    parseMoneyEdit(p.newValue, p.oldValue);
   const copayCol = (field: "old_copay" | "new_copay", headerName: string): ColDef<RefillRow> => ({
     field,
     headerName,
@@ -197,12 +193,8 @@ export function refillCols(lookups: Lookups, opts: RefillColOpts) {
       headerName: "Refills left",
       width: 85,
       editable: true,
-      valueParser: (p) => {
-        const t = String(p.newValue ?? "").trim();
-        if (t === "") return null;
-        const n = Number(t);
-        return Number.isInteger(n) && n >= 0 ? n : p.oldValue;
-      },
+      valueParser: (p) =>
+        parseNonNegativeIntegerEdit(p.newValue, p.oldValue),
       type: "rightAligned",
     } as ColDef<RefillRow>,
     status: {

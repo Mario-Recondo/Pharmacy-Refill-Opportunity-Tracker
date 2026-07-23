@@ -14,14 +14,14 @@ import {
   type CellContextMenuEvent,
   type ColDef,
   type GridApi,
-  type GridReadyEvent,
   type RowClassParams,
 } from "ag-grid-community";
 import type { CustomCellRendererProps } from "ag-grid-react";
 import { daysQuiet, loadReqFollowUp } from "../data/refills";
 import type { Lookups, RefillRow } from "../data/types";
-import { confirmDeleteRefill, DROPDOWN_FIELDS, refillCols, useDueDateSort, useRefillCellEdit } from "./refillGrid";
+import { confirmDeleteRefill, refillCols, useDueDateSort, useRefillCellEdit } from "./refillGrid";
 import { RowCtxMenu, type CtxMenuState, type GridCtx } from "./gridParts";
+import { useGridInteraction } from "./GridInteractionProvider";
 import RefillDrawer from "./RefillDrawer";
 import { insuranceDisplayName } from "../lib/rules";
 
@@ -60,6 +60,7 @@ export default function ReqFollowUpView({ lookups, active, onOpenInMonth, onData
   const [drawerId, setDrawerId] = useState<number | null>(null);
   const [ctxMenu, setCtxMenu] = useState<CtxMenuState | null>(null);
   const apiRef = useRef<GridApi<RefillRow> | null>(null);
+  const gridInteraction = useGridInteraction("followup", apiRef);
   // unsorted = days-quiet query order here, not due-date order — day separators
   // only make sense once the user explicitly sorts by Due
   const { locked, toggleLock, resetSort, onSortChanged, isDayBreak } = useDueDateSort(apiRef, { unsortedIsDateOrder: false });
@@ -156,18 +157,12 @@ export default function ReqFollowUpView({ lookups, active, onOpenInMonth, onData
     ];
   }, [lookups, showSecondary]);
 
-  const onGridReady = useCallback((e: GridReadyEvent<RefillRow>) => {
-    apiRef.current = e.api;
-  }, []);
-
   const onCellClicked = useCallback((e: CellClickedEvent<RefillRow>) => {
     const field = e.colDef.field ?? "";
     if ((field === "drug_name" || field === "due_date") && e.data) {
       setDrawerId(e.data.id);
       return;
     }
-    if (!DROPDOWN_FIELDS.has(field) || e.rowIndex == null) return;
-    e.api.startEditingCell({ rowIndex: e.rowIndex, colKey: e.column.getColId() });
   }, []);
 
   const onCellContextMenu = useCallback((e: CellContextMenuEvent<RefillRow>) => {
@@ -256,16 +251,20 @@ export default function ReqFollowUpView({ lookups, active, onOpenInMonth, onData
             context={ctxRef.current}
             getRowId={(p) => String(p.data.id)}
             defaultColDef={{ sortable: true, resizable: true }}
-            onGridReady={onGridReady}
+            onGridReady={gridInteraction.onGridReady}
+            onGridPreDestroyed={gridInteraction.onGridPreDestroyed}
+            onCellFocused={gridInteraction.onCellFocused}
+            onCellEditingStarted={gridInteraction.onCellEditingStarted}
+            onCellEditingStopped={gridInteraction.onCellEditingStopped}
             onSortChanged={onSortChanged}
             onCellClicked={onCellClicked}
             onCellContextMenu={onCellContextMenu}
             preventDefaultOnContextMenu={true}
             onCellValueChanged={onCellValueChanged}
             getRowClass={getRowClass}
-            stopEditingWhenCellsLoseFocus={true}
-            enterNavigatesVertically={true}
-            enterNavigatesVerticallyAfterEdit={true}
+            singleClickEdit={true}
+            suppressStartEditOnTab={true}
+            invalidEditValueMode="revert"
             tooltipShowDelay={400}
             overlayNoRowsTemplate="No rows match the active filters"
           />
