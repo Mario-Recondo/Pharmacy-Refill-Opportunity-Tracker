@@ -1,6 +1,6 @@
 # Project Status
 
-Last updated: 2026-07-24
+Last updated: 2026-07-24 (grid click behavior + undo merged, unreleased)
 
 ## Current product state
 
@@ -9,9 +9,16 @@ Last updated: 2026-07-24
   light/dark-mode toggle in Settings > About. Dark mode uses charcoal surfaces
   without changing business colors, and the selected theme survives app
   restarts.
-- GitHub and local `main` are synchronized at `2059a94`. The signed installer,
-  signature, and `latest.json` updater manifest are published in the separate
-  releases repository.
+- GitHub and local `main` are synchronized at `76992ff` (PR #24). The signed
+  v1.2.1 installer, signature, and `latest.json` updater manifest are published
+  in the separate releases repository.
+- **`main` is ahead of the last release and that is deliberate.** The technician
+  wants several upgrades batched into the next release rather than shipping each
+  one, so grid click behavior and undo are merged but unreleased. Do not build or
+  publish a release until asked. Note the version strings in `package.json`,
+  `Cargo.toml`, `tauri.conf.json`, and `Cargo.lock` still read `1.2.1`, the
+  release that predates this work; the next release must bump them, or a new
+  build would be indistinguishable from what is already installed.
 - Current schema: migrations `001` through `008`.
 - SQLite data lives at
   `%APPDATA%/com.pharmacy.refill-tracker/refills.db`. Treat that file and any
@@ -33,13 +40,12 @@ Last updated: 2026-07-24
 
 - Q1 (CI/migration protection) and Q2 (durable agent guidance/state cleanup)
   are complete.
-- The grid click/focus behavior is implemented and committed locally as
-  `b9aee19` on `feature/grid-click-behavior`. It uses single-click editing when
-  no dropdown is open and consumes the first outside click when a dropdown is
-  open. This branch is intentionally **not pushed, merged, or released** while
-  it awaits technician review; v1.2.1 does not contain it.
-- Four follow-ups to that commit landed as `6fda2fb` and the commit after it on
-  the same branch, all verified in the running app on 2026-07-24:
+- **Grid click behavior and undo are merged to `main`** via PR #24 (`b9aee19`,
+  `6fda2fb`, `487c1e1`), reviewed in the running app by the technician on
+  2026-07-24 and unreleased on purpose per the batching note above. One click
+  starts editing an editable cell; an open dropdown's first outside click only
+  commits and closes, consuming that click.
+- What PR #24 contained, all verified live on 2026-07-24:
   - *Dead-click fix.* `b9aee19` used AG Grid's `singleClickEdit`, which starts
     an edit only when `event.detail === 1`. Because the browser keeps
     incrementing that counter for rapid clicks in the same spot, the second
@@ -54,7 +60,11 @@ Last updated: 2026-07-24
   - *Stray-commit fix and guard deletion.* See the two entries below.
   - Validation: `npx tsc --noEmit` clean, 165 Vitest tests passing, no console
     errors in the running app. Design docs, story 1.3, the flows convention,
-    and ADR 0005 were updated alongside the code.
+    and ADR 0005 were updated alongside the code. The quality baseline above
+    still quotes the 142-test v1.2.1 figure; `main` now stands at 165.
+  - Not implemented, by choice: **redo** (Ctrl+Y). Undo for row deletion also
+    stays out — the design doc and story 2.4 record deletion as permanent in v1
+    with its confirmation as the guard.
 - The 750 ms double-click guard in `GridInteractionProvider` was deleted
   (2026-07-24) after live tracing showed it inert: with the guard armed and with
   it idle, a double-click left the editor open either way, and nothing in `src/`
