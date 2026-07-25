@@ -40,6 +40,7 @@ Acceptance criteria:
 - Invalid entry never blocks navigation or shows an error; it silently restores the original value. A real database-save failure remains visible and restores the value.
 - A refill-note change that would clear an existing call note still requires its centered destructive confirmation.
 - Tab/arrow-key navigation between cells works, so the keyboard-heavy Sheets workflow carries over.
+- Ctrl+Z undoes a mis-clicked field edit (added 2026-07-24). It undoes without asking on the row currently focused; reaching an edit on a different row warns first and needs a second press to cross, and holding the key never walks the stack. Each undo scrolls to the row, flashes the changed cells, and says what it restored. A refill-note change that cleared a call note undoes both together. Deletion is not undoable (story 2.4).
 
 **1.4 — Copy an Rx number instantly**
 As a technician, I want to click any Rx # to copy it, so that I can paste it into PioneerRX search without retyping.

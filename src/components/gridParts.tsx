@@ -54,6 +54,15 @@ export function PillSelectEditor(props: CustomCellEditorProps<RefillRow>) {
   const typeaheadRef = useRef(initialTypeahead);
   const typeaheadTimerRef =
     useRef<ReturnType<typeof setTimeout>>(undefined);
+  /**
+   * A click can only choose an option once the pointer has moved onto this
+   * popup. When a popup opens under a stationary cursor, rapid clicking would
+   * otherwise land on an option and commit it silently — four wrong insurances
+   * in about two seconds, reproduced 2026-07-24. Moving onto an option is the
+   * signal that the technician meant to pick it; keyboard selection is
+   * unaffected.
+   */
+  const pointerMovedRef = useRef(false);
 
   useEffect(() => {
     listRef.current?.focus();
@@ -146,6 +155,9 @@ export function PillSelectEditor(props: CustomCellEditorProps<RefillRow>) {
       ref={listRef}
       tabIndex={0}
       onKeyDown={onKeyDown}
+      onPointerMove={() => {
+        pointerMovedRef.current = true;
+      }}
     >
       {choices.map((c, i) => (
         <div
@@ -154,7 +166,9 @@ export function PillSelectEditor(props: CustomCellEditorProps<RefillRow>) {
           style={c.color ? { background: c.color, color: textColorFor(c.color) } : undefined}
           title={c.meaning || undefined}
           onMouseEnter={() => setHighlight(i)}
-          onClick={() => pick(c)}
+          onClick={() => {
+            if (pointerMovedRef.current) pick(c);
+          }}
         >
           {c.label}
         </div>

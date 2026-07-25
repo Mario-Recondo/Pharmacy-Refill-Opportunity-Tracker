@@ -49,6 +49,15 @@ interface GridInteractionController {
   editorStopped(): void;
   setTypeaheadBuffer(buffer: string): void;
   finishCurrentEdit(exit: EditExit): void;
+  /** True while an editor is open, so global shortcuts can leave editing keys
+   *  (Ctrl+Z inside a text editor stays native text-undo) alone. */
+  isEditing(): boolean;
+  /** The row the technician is on, for the undo row-boundary rule. */
+  focusedRowId(): number | null;
+  /** Scrolls to a row, flashes the given fields, and focuses the first of them
+   *  so an undo is something the technician watches happen. Returns whether the
+   *  row was found in any live grid. */
+  revealCells(rowId: number, fields: string[]): boolean;
 }
 
 const GridInteractionContext =
@@ -121,10 +130,7 @@ export function GridInteractionProvider({
   const stateRef = useRef<GridInteractionState>({ kind: "idle" });
   const gridsRef = useRef(new Map<string, GridApi<RefillRow>>());
   const suppressClickRef = useRef(false);
-  const suppressDoubleClickUntilRef = useRef(0);
   const clickFallbackRef = useRef<ReturnType<typeof setTimeout>>(undefined);
-  const doubleClickFallbackRef =
-    useRef<ReturnType<typeof setTimeout>>(undefined);
 
   const dispatch = useCallback((event: GridInteractionEvent) => {
     stateRef.current = gridInteractionTransition(stateRef.current, event);
@@ -200,7 +206,6 @@ export function GridInteractionProvider({
       if (!decision.consumePointer) return;
 
       suppressClickRef.current = true;
-      suppressDoubleClickUntilRef.current = Date.now() + 750;
       clearTimeout(clickFallbackRef.current);
       consumeEvent(event);
     };
@@ -217,38 +222,16 @@ export function GridInteractionProvider({
     };
 
     const onClick = (event: MouseEvent) => {
-      if (suppressClickRef.current) {
-        suppressClickRef.current = false;
-        clearTimeout(clickFallbackRef.current);
-        consumeEvent(event);
-        return;
-      }
-      if (Date.now() > suppressDoubleClickUntilRef.current) return;
-      const expectedUntil = suppressDoubleClickUntilRef.current;
-      clearTimeout(doubleClickFallbackRef.current);
-      // `dblclick` follows the second `click` synchronously. If the browser did
-      // not pair this click with the consumed one, release the guard before a
-      // later intentional double-click.
-      doubleClickFallbackRef.current = setTimeout(() => {
-        if (suppressDoubleClickUntilRef.current === expectedUntil) {
-          suppressDoubleClickUntilRef.current = 0;
-        }
-      }, 0);
-    };
-
-    const onDoubleClick = (event: MouseEvent) => {
-      if (Date.now() > suppressDoubleClickUntilRef.current) return;
-      suppressDoubleClickUntilRef.current = 0;
-      clearTimeout(doubleClickFallbackRef.current);
+      if (!suppressClickRef.current) return;
+      suppressClickRef.current = false;
+      clearTimeout(clickFallbackRef.current);
       consumeEvent(event);
     };
 
     const onContextMenu = (event: MouseEvent) => {
       if (!suppressClickRef.current) return;
       suppressClickRef.current = false;
-      suppressDoubleClickUntilRef.current = 0;
       clearTimeout(clickFallbackRef.current);
-      clearTimeout(doubleClickFallbackRef.current);
       consumeEvent(event);
     };
 
@@ -280,16 +263,13 @@ export function GridInteractionProvider({
     window.addEventListener("mousedown", onMouseDown, true);
     window.addEventListener("mouseup", onMouseUp, true);
     window.addEventListener("click", onClick, true);
-    window.addEventListener("dblclick", onDoubleClick, true);
     window.addEventListener("contextmenu", onContextMenu, true);
     window.addEventListener("keydown", onKeyDown, true);
     return () => {
       clearTimeout(clickFallbackRef.current);
-      clearTimeout(doubleClickFallbackRef.current);
       window.removeEventListener("mousedown", onMouseDown, true);
       window.removeEventListener("mouseup", onMouseUp, true);
       window.removeEventListener("click", onClick, true);
-      window.removeEventListener("dblclick", onDoubleClick, true);
       window.removeEventListener("contextmenu", onContextMenu, true);
       window.removeEventListener("keydown", onKeyDown, true);
     };
@@ -306,6 +286,27 @@ export function GridInteractionProvider({
       setTypeaheadBuffer: (buffer) =>
         dispatch({ type: "TYPEAHEAD_CHANGED", buffer }),
       finishCurrentEdit,
+      isEditing: () => isEditingState(stateRef.current),
+      focusedRowId: () => {
+        const state = stateRef.current;
+        if (!("cell" in state)) return null;
+        const rowId = Number(state.cell.rowId);
+        return Number.isFinite(rowId) ? rowId : null;
+      },
+      revealCells: (rowId, fields) => {
+        let found = false;
+        for (const api of gridsRef.current.values()) {
+          const node = api.getRowNode(String(rowId));
+          if (!node) continue;
+          found = true;
+          api.ensureNodeVisible(node, "middle");
+          api.flashCells({ rowNodes: [node], columns: fields });
+          if (node.rowIndex != null && fields[0]) {
+            api.setFocusedCell(node.rowIndex, fields[0]);
+          }
+        }
+        return found;
+      },
     }),
     [dispatch, finishCurrentEdit, registerGrid, unregisterGrid],
   );

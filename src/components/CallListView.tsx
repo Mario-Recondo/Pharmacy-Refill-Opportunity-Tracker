@@ -5,7 +5,8 @@ import { AgGridReact } from "ag-grid-react";
 import { themeQuartz, type CellClickedEvent, type CellContextMenuEvent, type ColDef, type GridApi, type RowClassParams } from "ag-grid-community";
 import { autoQualifiesForCallList, isCalledToday, loadCallList, setCallListPin } from "../data/refills";
 import type { Lookups, RefillRow } from "../data/types";
-import { confirmDeleteRefill, refillCols, useDueDateSort, useRefillCellEdit } from "./refillGrid";
+import { confirmDeleteRefill, refillCols, startEditOnClick, useDueDateSort, useRefillCellEdit } from "./refillGrid";
+import { useUndoRefresh } from "./UndoProvider";
 import { RowCtxMenu, type CtxMenuState, type GridCtx } from "./gridParts";
 import { useGridInteraction } from "./GridInteractionProvider";
 import RefillDrawer from "./RefillDrawer";
@@ -47,6 +48,8 @@ export default function CallListView({ lookups, active, today, onOpenInMonth, on
   useEffect(() => { apiRef.current?.refreshCells({ force: true }); apiRef.current?.redrawRows(); }, [filteredRows, profitMax, today]);
 
   const onMutated = useCallback(() => { onDataChanged(); load(); }, [onDataChanged, load]);
+  // an undo writes straight to the database, so pull the row back in
+  useUndoRefresh(load);
   const onCellValueChanged = useRefillCellEdit(lookups, onMutated);
   const editRow = drawerId == null ? undefined : rows.find((r) => r.id === drawerId);
   const deleteRow = useCallback(async (row: RefillRow) => {
@@ -63,6 +66,7 @@ export default function CallListView({ lookups, active, today, onOpenInMonth, on
   const onCellClicked = useCallback((e: CellClickedEvent<RefillRow>) => {
     const field = e.colDef.field ?? "";
     if ((field === "drug_name" || field === "due_date") && e.data) { setDrawerId(e.data.id); return; }
+    startEditOnClick(e);
   }, []);
   const onCellContextMenu = useCallback((e: CellContextMenuEvent<RefillRow>) => {
     if (!e.data) return;
@@ -106,7 +110,7 @@ export default function CallListView({ lookups, active, today, onOpenInMonth, on
       </div>
     </div>
     {loaded && rows.length === 0 ? <div className="empty-month"><h2>No refills ready to call today</h2><p>Process today's refills in the Month grid, or right-click a row → Add to today's call list.</p></div> : <div className="grid-wrap">
-      <AgGridReact<RefillRow> theme={themeQuartz} rowData={filteredRows} columnDefs={columnDefs} context={ctxRef.current} getRowId={(p) => String(p.data.id)} defaultColDef={{ sortable: true, resizable: true }} onGridReady={gridInteraction.onGridReady} onGridPreDestroyed={gridInteraction.onGridPreDestroyed} onCellFocused={gridInteraction.onCellFocused} onCellEditingStarted={gridInteraction.onCellEditingStarted} onCellEditingStopped={gridInteraction.onCellEditingStopped} onSortChanged={onSortChanged} onCellClicked={onCellClicked} onCellContextMenu={onCellContextMenu} preventDefaultOnContextMenu={true} onCellValueChanged={onCellValueChanged} getRowClass={getRowClass} singleClickEdit={true} suppressStartEditOnTab={true} invalidEditValueMode="revert" tooltipShowDelay={400} overlayNoRowsTemplate="No rows match the active filters" />
+      <AgGridReact<RefillRow> theme={themeQuartz} rowData={filteredRows} columnDefs={columnDefs} context={ctxRef.current} getRowId={(p) => String(p.data.id)} defaultColDef={{ sortable: true, resizable: true }} onGridReady={gridInteraction.onGridReady} onGridPreDestroyed={gridInteraction.onGridPreDestroyed} onCellFocused={gridInteraction.onCellFocused} onCellEditingStarted={gridInteraction.onCellEditingStarted} onCellEditingStopped={gridInteraction.onCellEditingStopped} onSortChanged={onSortChanged} onCellClicked={onCellClicked} onCellContextMenu={onCellContextMenu} preventDefaultOnContextMenu={true} onCellValueChanged={onCellValueChanged} getRowClass={getRowClass} suppressStartEditOnTab={true} invalidEditValueMode="revert" tooltipShowDelay={400} overlayNoRowsTemplate="No rows match the active filters" />
     </div>}
     {ctxMenu && <RowCtxMenu menu={ctxMenu} onDelete={deleteRow} onDismiss={() => setCtxMenu(null)} extraItems={extraItems} />}
     {editRow && <RefillDrawer key={editRow.id} mode={{ kind: "edit", row: editRow }} lookups={lookups} profitMax={profitMax} onClose={() => setDrawerId(null)} onRowEdited={onMutated} onCreated={() => {}} onOpenRefill={(id, dueDate) => rows.some((r) => r.id === id) ? setDrawerId(id) : (setDrawerId(null), onOpenInMonth(id, dueDate))} onDelete={deleteRow} />}

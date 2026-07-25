@@ -24,6 +24,24 @@ import {
 import { copayColor, formatMoney, profitStyle, textColorFor } from "../lib/colors";
 import { confirmDestructive } from "../lib/confirmDialog";
 import { insuranceDisplayName, noteQualifiesForCallNote } from "../lib/rules";
+import { describeFieldValue, type UndoStep } from "../lib/undoStack";
+import { useUndoController } from "./UndoProvider";
+
+/** Undo toast labels for drawer fields, which have no grid `headerName`. */
+const FIELD_LABELS: Partial<Record<EditableField, string>> = {
+  insurance_id: "Insurance",
+  secondary_id: "Secondary",
+  old_copay: "Old copay",
+  new_copay: "New copay",
+  old_profit: "Old profit",
+  new_profit: "New profit",
+  refills_filled: "Refills filled",
+  refills_left: "Refills left",
+  refill_note_id: "Refill note",
+  call_note_id: "Call note",
+  status: "Status",
+  notes: "Notes",
+};
 
 export type DrawerMode = { kind: "edit"; row: RefillRow } | { kind: "create"; dueDate: string };
 
@@ -309,6 +327,14 @@ export default function RefillDrawer({ mode, lookups, profitMax, onClose, onRowE
   const editRow = mode.kind === "edit" ? mode.row : null;
   const [, bump] = useReducer((x: number) => x + 1, 0); // re-render after an aborted save so controlled selects snap back
 
+  // While the drawer is open no grid cell is focused, so it supplies the row
+  // that Ctrl+Z may undo without asking.
+  const { record, setContextRow } = useUndoController();
+  useEffect(() => {
+    setContextRow(editRow?.id ?? null);
+    return () => setContextRow(null);
+  }, [editRow?.id, setContextRow]);
+
   const [drugs, setDrugs] = useState<Drug[]>([]);
   useEffect(() => {
     loadDrugs().then(setDrugs).catch(console.error);
@@ -356,6 +382,9 @@ export default function RefillDrawer({ mode, lookups, profitMax, onClose, onRowE
 
   const saveEditable = async (field: EditableField, value: unknown): Promise<boolean> => {
     const row = editRow!;
+    // Captured before any write; recorded only once the write succeeds.
+    const oldValue = (row as unknown as Record<string, unknown>)[field];
+    const undoSteps: UndoStep[] = [{ field, oldValue }];
     try {
       // call-note gating: never silently wipe a call note (story 1.5)
       if (field === "refill_note_id" && !noteQualifiesForCallNote(value as number | null, lookups) && row.call_note_id != null) {
@@ -368,6 +397,8 @@ export default function RefillDrawer({ mode, lookups, profitMax, onClose, onRowE
           bump();
           return false;
         }
+        // undone together with the refill note, never left wiped on its own
+        undoSteps.push({ field: "call_note_id", oldValue: row.call_note_id });
         row.call_note_id = null;
         row.call_note_set_at = null;
         await updateRefillField(row.id, "call_note_id", null);
@@ -376,6 +407,13 @@ export default function RefillDrawer({ mode, lookups, profitMax, onClose, onRowE
       (row as unknown as Record<string, unknown>)[field] = value ?? null;
       if (res.refill_note_set_at !== undefined) row.refill_note_set_at = res.refill_note_set_at;
       if (res.call_note_set_at !== undefined) row.call_note_set_at = res.call_note_set_at;
+      record({
+        rowId: row.id,
+        rowLabel: `Rx ${row.rx_number}`,
+        fieldLabel: FIELD_LABELS[field] ?? field,
+        restoredLabel: describeFieldValue(field, oldValue, lookups),
+        steps: undoSteps,
+      });
       setActivitySeq((s) => s + 1);
       onRowEdited(row, false);
       return true;

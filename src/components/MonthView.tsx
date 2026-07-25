@@ -10,9 +10,10 @@ import {
 } from "ag-grid-community";
 import { loadMonth, loadMonthCounts, setCallListPin, todayIso } from "../data/refills";
 import { STATUSES, type Lookups, type RefillRow, type RefillStatus } from "../data/types";
-import { confirmDeleteRefill, dueLabel, refillCols, useDueDateSort, useRefillCellEdit } from "./refillGrid";
+import { confirmDeleteRefill, dueLabel, refillCols, startEditOnClick, useDueDateSort, useRefillCellEdit } from "./refillGrid";
 import { RowCtxMenu, type CtxMenuState, type GridCtx } from "./gridParts";
 import { useGridInteraction } from "./GridInteractionProvider";
+import { useUndoRefresh } from "./UndoProvider";
 import OpportunitiesPanel from "./OpportunitiesPanel";
 import RefillDrawer from "./RefillDrawer";
 import { insuranceDisplayName } from "../lib/rules";
@@ -86,6 +87,13 @@ export default function MonthView({ lookups, active, navRequest, onDataChanged, 
   useEffect(() => {
     loadMonthCounts().then(setMonthCounts).catch(console.error);
   }, []);
+
+  // an undo writes straight to the database, so pull the row back in
+  useUndoRefresh(
+    useCallback(() => {
+      loadMonth(ym).then(setRows).catch(console.error);
+    }, [ym]),
+  );
 
   // returning from another tab: edits there may have touched this month — reload, keeping filters
   const wasActiveRef = useRef(active);
@@ -337,6 +345,7 @@ export default function MonthView({ lookups, active, navRequest, onDataChanged, 
       setDrawer({ kind: "edit", id: e.data.id });
       return;
     }
+    startEditOnClick(e);
   }, []);
 
   // ----- toolbar data --------------------------------------------------------
@@ -461,7 +470,6 @@ export default function MonthView({ lookups, active, navRequest, onDataChanged, 
             preventDefaultOnContextMenu={true}
             onCellValueChanged={onCellValueChanged}
             getRowClass={getRowClass}
-            singleClickEdit={true}
             suppressStartEditOnTab={true}
             invalidEditValueMode="revert"
             tooltipShowDelay={400}

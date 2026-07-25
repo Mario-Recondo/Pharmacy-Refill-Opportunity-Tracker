@@ -28,6 +28,7 @@ Across Month, Call List, Req Follow Up, and Overdue, grid clicks follow one cons
 3. From an open dropdown, the first outside click only commits/restores and closes the dropdown. Nothing underneath receives that click; click again to open or activate the target.
 4. Escape restores the original value. Enter and Tab commit/restore and move selection without editing the destination.
 5. Invalid input never traps the technician. Destructive call-note clearing still confirms, and a real database-save failure still displays its existing notice.
+6. Ctrl+Z undoes the last field edit, in the grid or the drawer. It applies straight away on the row you are on; an edit belonging to another row warns first and needs a second press. Holding the key does nothing extra. Every undo scrolls to the row, flashes what changed, and names what it restored — so an undo is never something that happened off-screen. Inside an open editor, Ctrl+Z stays text-undo.
 
 ---
 

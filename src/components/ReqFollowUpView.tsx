@@ -19,7 +19,8 @@ import {
 import type { CustomCellRendererProps } from "ag-grid-react";
 import { daysQuiet, loadReqFollowUp } from "../data/refills";
 import type { Lookups, RefillRow } from "../data/types";
-import { confirmDeleteRefill, refillCols, useDueDateSort, useRefillCellEdit } from "./refillGrid";
+import { confirmDeleteRefill, refillCols, startEditOnClick, useDueDateSort, useRefillCellEdit } from "./refillGrid";
+import { useUndoRefresh } from "./UndoProvider";
 import { RowCtxMenu, type CtxMenuState, type GridCtx } from "./gridParts";
 import { useGridInteraction } from "./GridInteractionProvider";
 import RefillDrawer from "./RefillDrawer";
@@ -113,6 +114,9 @@ export default function ReqFollowUpView({ lookups, active, onOpenInMonth, onData
     load();
   }, [onDataChanged, load]);
 
+  // an undo writes straight to the database, so pull the row back in
+  useUndoRefresh(load);
+
   const onCellValueChanged = useRefillCellEdit(lookups, onMutated);
 
   const editRow = drawerId != null ? rows.find((r) => r.id === drawerId) : undefined;
@@ -163,6 +167,7 @@ export default function ReqFollowUpView({ lookups, active, onOpenInMonth, onData
       setDrawerId(e.data.id);
       return;
     }
+    startEditOnClick(e);
   }, []);
 
   const onCellContextMenu = useCallback((e: CellContextMenuEvent<RefillRow>) => {
@@ -262,7 +267,6 @@ export default function ReqFollowUpView({ lookups, active, onOpenInMonth, onData
             preventDefaultOnContextMenu={true}
             onCellValueChanged={onCellValueChanged}
             getRowClass={getRowClass}
-            singleClickEdit={true}
             suppressStartEditOnTab={true}
             invalidEditValueMode="revert"
             tooltipShowDelay={400}
