@@ -129,8 +129,9 @@ export function GridInteractionProvider({
 }) {
   const stateRef = useRef<GridInteractionState>({ kind: "idle" });
   const gridsRef = useRef(new Map<string, GridApi<RefillRow>>());
+  /** Set when an outside pointer press is consumed, so the rest of that gesture
+   *  (mouseup, click) is swallowed too. Reset by the next `pointerdown`. */
   const suppressClickRef = useRef(false);
-  const clickFallbackRef = useRef<ReturnType<typeof setTimeout>>(undefined);
 
   const dispatch = useCallback((event: GridInteractionEvent) => {
     stateRef.current = gridInteractionTransition(stateRef.current, event);
@@ -188,6 +189,17 @@ export function GridInteractionProvider({
   );
 
   useEffect(() => {
+    // Every pointer gesture starts here, before its `mousedown`, so clearing the
+    // guard now means it can never outlive the gesture that armed it. Without
+    // this, a gesture whose `mouseup` never reaches the page — focus lost to
+    // another window, button released outside the WebView — left the guard set,
+    // and it silently ate the next real click anywhere in the app. That is
+    // indistinguishable from the intended two-click dropdown rule, so it was
+    // effectively unreportable.
+    const onPointerDown = () => {
+      suppressClickRef.current = false;
+    };
+
     const onMouseDown = (event: MouseEvent) => {
       const state = stateRef.current;
       if (!isEditingState(state)) return;
@@ -206,32 +218,23 @@ export function GridInteractionProvider({
       if (!decision.consumePointer) return;
 
       suppressClickRef.current = true;
-      clearTimeout(clickFallbackRef.current);
       consumeEvent(event);
     };
 
     const onMouseUp = (event: MouseEvent) => {
       if (!suppressClickRef.current) return;
       consumeEvent(event);
-      clearTimeout(clickFallbackRef.current);
-      // A normal click is dispatched synchronously after mouseup. This only
-      // clears the guard when the browser produces no click for the sequence.
-      clickFallbackRef.current = setTimeout(() => {
-        suppressClickRef.current = false;
-      }, 0);
     };
 
     const onClick = (event: MouseEvent) => {
       if (!suppressClickRef.current) return;
       suppressClickRef.current = false;
-      clearTimeout(clickFallbackRef.current);
       consumeEvent(event);
     };
 
     const onContextMenu = (event: MouseEvent) => {
       if (!suppressClickRef.current) return;
       suppressClickRef.current = false;
-      clearTimeout(clickFallbackRef.current);
       consumeEvent(event);
     };
 
@@ -260,13 +263,14 @@ export function GridInteractionProvider({
       }
     };
 
+    window.addEventListener("pointerdown", onPointerDown, true);
     window.addEventListener("mousedown", onMouseDown, true);
     window.addEventListener("mouseup", onMouseUp, true);
     window.addEventListener("click", onClick, true);
     window.addEventListener("contextmenu", onContextMenu, true);
     window.addEventListener("keydown", onKeyDown, true);
     return () => {
-      clearTimeout(clickFallbackRef.current);
+      window.removeEventListener("pointerdown", onPointerDown, true);
       window.removeEventListener("mousedown", onMouseDown, true);
       window.removeEventListener("mouseup", onMouseUp, true);
       window.removeEventListener("click", onClick, true);
