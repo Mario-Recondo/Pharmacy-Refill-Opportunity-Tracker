@@ -2,7 +2,9 @@ import { useEffect, useRef, useState } from "react";
 import type { CustomCellEditorProps, CustomCellRendererProps } from "ag-grid-react";
 import { textColorFor } from "../lib/colors";
 import { insuranceDisplayName, insuranceLogoUrl, secondaryLogoUrl } from "../lib/rules";
+import { nextTypeaheadMatch } from "../lib/gridInteractionMachine";
 import type { Lookups, RefillRow } from "../data/types";
+import { useGridInteractionController } from "./GridInteractionProvider";
 
 /** Passed to AG Grid as `context`, readable from every renderer/style callback. */
 export interface GridCtx {
@@ -29,6 +31,7 @@ export interface PillItem {
 // ---------------------------------------------------------------------------
 
 export function PillSelectEditor(props: CustomCellEditorProps<RefillRow>) {
+  const interaction = useGridInteractionController();
   const { items, allowClear } = props.colDef!.cellEditorParams as {
     items: PillItem[];
     allowClear: boolean;
@@ -36,38 +39,126 @@ export function PillSelectEditor(props: CustomCellEditorProps<RefillRow>) {
   const choices: PillItem[] = allowClear
     ? [{ value: null, label: "— clear —", clear: true }, ...items]
     : items;
-  const [highlight, setHighlight] = useState(() =>
-    Math.max(0, choices.findIndex((c) => c.value === props.value)),
-  );
+  const choiceLabels = choices.map((choice) => choice.label);
+  const initialTypeahead =
+    props.eventKey?.length === 1 ? props.eventKey : "";
+  const [highlight, setHighlight] = useState(() => {
+    const typeaheadMatch = initialTypeahead
+      ? nextTypeaheadMatch(choiceLabels, "", initialTypeahead).index
+      : -1;
+    return typeaheadMatch >= 0
+      ? typeaheadMatch
+      : Math.max(0, choices.findIndex((c) => c.value === props.value));
+  });
   const listRef = useRef<HTMLDivElement>(null);
+  const typeaheadRef = useRef(initialTypeahead);
+  const typeaheadTimerRef =
+    useRef<ReturnType<typeof setTimeout>>(undefined);
+  /**
+   * A click can only choose an option once the pointer has moved onto this
+   * popup. When a popup opens under a stationary cursor, rapid clicking would
+   * otherwise land on an option and commit it silently — four wrong insurances
+   * in about two seconds, reproduced 2026-07-24. Moving onto an option is the
+   * signal that the technician meant to pick it; keyboard selection is
+   * unaffected.
+   */
+  const pointerMovedRef = useRef(false);
 
   useEffect(() => {
     listRef.current?.focus();
     listRef.current?.children[highlight]?.scrollIntoView({ block: "nearest" });
+    if (initialTypeahead) interaction.setTypeaheadBuffer(initialTypeahead);
+    return () => clearTimeout(typeaheadTimerRef.current);
+    // Editor choices are fixed for the lifetime of this popup.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const pick = (item: PillItem) => {
+  const pick = (
+    item: PillItem,
+    exit:
+      | { kind: "commit"; move: "none" }
+      | {
+          kind: "commit";
+          move: "enter";
+          backwards: boolean;
+          keyboardEvent: KeyboardEvent;
+        } = { kind: "commit", move: "none" },
+  ) => {
     props.onValueChange(item.value);
-    props.stopEditing();
+    interaction.finishCurrentEdit(exit);
+  };
+
+  const moveHighlight = (next: number) => {
+    setHighlight(next);
+    listRef.current?.children[next]?.scrollIntoView({ block: "nearest" });
+  };
+
+  const applyTypeahead = (key: string) => {
+    const { buffer, index } = nextTypeaheadMatch(
+      choiceLabels,
+      typeaheadRef.current,
+      key,
+    );
+    typeaheadRef.current = buffer;
+    interaction.setTypeaheadBuffer(buffer);
+    clearTimeout(typeaheadTimerRef.current);
+    typeaheadTimerRef.current = setTimeout(() => {
+      typeaheadRef.current = "";
+      interaction.setTypeaheadBuffer("");
+    }, 700);
+    if (index >= 0) moveHighlight(index);
   };
 
   const onKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === "ArrowDown" || e.key === "ArrowUp") {
       e.preventDefault();
       const next = Math.min(choices.length - 1, Math.max(0, highlight + (e.key === "ArrowDown" ? 1 : -1)));
-      setHighlight(next);
-      listRef.current?.children[next]?.scrollIntoView({ block: "nearest" });
+      moveHighlight(next);
     } else if (e.key === "Enter") {
       e.preventDefault();
-      pick(choices[highlight]);
+      e.stopPropagation();
+      pick(choices[highlight], {
+        kind: "commit",
+        move: "enter",
+        backwards: e.shiftKey,
+        keyboardEvent: e.nativeEvent,
+      });
+    } else if (e.key === "Tab") {
+      e.preventDefault();
+      e.stopPropagation();
+      interaction.finishCurrentEdit({
+        kind: "commit",
+        move: "tab",
+        backwards: e.shiftKey,
+        keyboardEvent: e.nativeEvent,
+      });
     } else if (e.key === "Escape") {
-      props.stopEditing(true);
+      e.preventDefault();
+      e.stopPropagation();
+      interaction.finishCurrentEdit({ kind: "revert", move: "none" });
+    } else if (
+      e.key.length === 1 &&
+      !e.ctrlKey &&
+      !e.metaKey &&
+      !e.altKey
+    ) {
+      e.preventDefault();
+      e.stopPropagation();
+      applyTypeahead(e.key);
     }
   };
 
   return (
-    <div className="pill-editor" ref={listRef} tabIndex={0} onKeyDown={onKeyDown}>
+    <div
+      className="pill-editor"
+      data-grid-editor-overlay="true"
+      ref={listRef}
+      tabIndex={0}
+      onKeyDown={onKeyDown}
+      onPointerMove={() => {
+        pointerMovedRef.current = true;
+      }}
+    >
       {choices.map((c, i) => (
         <div
           key={String(c.value)}
@@ -75,7 +166,9 @@ export function PillSelectEditor(props: CustomCellEditorProps<RefillRow>) {
           style={c.color ? { background: c.color, color: textColorFor(c.color) } : undefined}
           title={c.meaning || undefined}
           onMouseEnter={() => setHighlight(i)}
-          onClick={() => pick(c)}
+          onClick={() => {
+            if (pointerMovedRef.current) pick(c);
+          }}
         >
           {c.label}
         </div>

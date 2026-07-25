@@ -16,14 +16,15 @@ import {
   type CellContextMenuEvent,
   type ColDef,
   type GridApi,
-  type GridReadyEvent,
   type RowClassParams,
 } from "ag-grid-community";
 import type { CustomCellRendererProps } from "ag-grid-react";
 import { loadOverdue, todayIso } from "../data/refills";
 import { STATUSES, type Lookups, type RefillRow, type RefillStatus } from "../data/types";
-import { confirmDeleteRefill, DROPDOWN_FIELDS, dueLabel, refillCols, useDueDateSort, useRefillCellEdit } from "./refillGrid";
+import { confirmDeleteRefill, dueLabel, refillCols, startEditOnClick, useDueDateSort, useRefillCellEdit } from "./refillGrid";
+import { useUndoRefresh } from "./UndoProvider";
 import { RowCtxMenu, type CtxMenuState, type GridCtx } from "./gridParts";
+import { useGridInteraction } from "./GridInteractionProvider";
 import RefillDrawer from "./RefillDrawer";
 import { insuranceDisplayName } from "../lib/rules";
 
@@ -72,6 +73,7 @@ export default function OverdueView({ lookups, active, onOpenInMonth, onDataChan
   const [drawerId, setDrawerId] = useState<number | null>(null);
   const [ctxMenu, setCtxMenu] = useState<CtxMenuState | null>(null);
   const apiRef = useRef<GridApi<RefillRow> | null>(null);
+  const gridInteraction = useGridInteraction("overdue", apiRef);
   const { locked, toggleLock, resetSort, onSortChanged, isDayBreak } = useDueDateSort(apiRef);
 
   const load = useCallback(() => {
@@ -125,6 +127,9 @@ export default function OverdueView({ lookups, active, onOpenInMonth, onDataChan
     load();
   }, [onDataChanged, load]);
 
+  // an undo writes straight to the database, so pull the row back in
+  useUndoRefresh(load);
+
   const onCellValueChanged = useRefillCellEdit(lookups, onMutated);
 
   const editRow = drawerId != null ? rows.find((r) => r.id === drawerId) : undefined;
@@ -169,18 +174,13 @@ export default function OverdueView({ lookups, active, onOpenInMonth, onDataChan
     ];
   }, [lookups, showSecondary]);
 
-  const onGridReady = useCallback((e: GridReadyEvent<RefillRow>) => {
-    apiRef.current = e.api;
-  }, []);
-
   const onCellClicked = useCallback((e: CellClickedEvent<RefillRow>) => {
     const field = e.colDef.field ?? "";
     if ((field === "drug_name" || field === "due_date") && e.data) {
       setDrawerId(e.data.id);
       return;
     }
-    if (!DROPDOWN_FIELDS.has(field) || e.rowIndex == null) return;
-    e.api.startEditingCell({ rowIndex: e.rowIndex, colKey: e.column.getColId() });
+    startEditOnClick(e);
   }, []);
 
   const onCellContextMenu = useCallback((e: CellContextMenuEvent<RefillRow>) => {
@@ -301,16 +301,19 @@ export default function OverdueView({ lookups, active, onOpenInMonth, onDataChan
             context={ctxRef.current}
             getRowId={(p) => String(p.data.id)}
             defaultColDef={{ sortable: true, resizable: true }}
-            onGridReady={onGridReady}
+            onGridReady={gridInteraction.onGridReady}
+            onGridPreDestroyed={gridInteraction.onGridPreDestroyed}
+            onCellFocused={gridInteraction.onCellFocused}
+            onCellEditingStarted={gridInteraction.onCellEditingStarted}
+            onCellEditingStopped={gridInteraction.onCellEditingStopped}
             onSortChanged={onSortChanged}
             onCellClicked={onCellClicked}
             onCellContextMenu={onCellContextMenu}
             preventDefaultOnContextMenu={true}
             onCellValueChanged={onCellValueChanged}
             getRowClass={getRowClass}
-            stopEditingWhenCellsLoseFocus={true}
-            enterNavigatesVertically={true}
-            enterNavigatesVerticallyAfterEdit={true}
+            suppressStartEditOnTab={true}
+            invalidEditValueMode="revert"
             tooltipShowDelay={400}
             overlayNoRowsTemplate="No rows match the active filters"
           />

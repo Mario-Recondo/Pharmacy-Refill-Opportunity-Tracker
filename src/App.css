@@ -157,6 +157,34 @@ body {
   border-bottom: 1px solid #eadcb8;
 }
 
+/* undo feedback: an undo can touch a row that is scrolled away or on another
+   tab, so it always says what it did */
+.undo-toast {
+  position: fixed;
+  bottom: 18px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 60;
+  max-width: 560px;
+  padding: 9px 16px;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.18);
+}
+
+.undo-toast.info {
+  background: #eef4ff;
+  color: #1d3d75;
+  border: 1px solid #c2d4f0;
+}
+
+.undo-toast.warn {
+  background: #fff6e5;
+  color: #8a5a00;
+  border: 1px solid #eadcb8;
+}
+
 .call-list-ghost {
   font: inherit;
   font-size: 11px;
@@ -1693,6 +1721,22 @@ textarea:focus-visible {
 }
 
 :root[data-theme="dark"] .overdue-banner {
+  border-color: #5c4a2b;
+  background: #382f20;
+  color: #e5c27b;
+}
+
+:root[data-theme="dark"] .undo-toast {
+  box-shadow: 0 4px 16px rgba(0, 0, 0, .45);
+}
+
+:root[data-theme="dark"] .undo-toast.info {
+  border-color: #2f4468;
+  background: #1e2a3d;
+  color: #a8c4ee;
+}
+
+:root[data-theme="dark"] .undo-toast.warn {
   border-color: #5c4a2b;
   background: #382f20;
   color: #e5c27b;

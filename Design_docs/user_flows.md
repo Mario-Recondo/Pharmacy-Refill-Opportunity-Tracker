@@ -19,6 +19,19 @@ Success condition: from double-click to "working" is one step and zero decisions
 
 ---
 
+## Grid Interaction Convention
+
+Across Month, Call List, Req Follow Up, and Overdue, grid clicks follow one consistent editing rule:
+
+1. With no dropdown open, one click edits an editable cell. Enter or typing also edits a selected cell; typing into a dropdown selects the first prefix match.
+2. From a text/number edit, clicking another editable cell or control commits a valid value (or silently restores an invalid value) and opens or activates the target in that same click.
+3. From an open dropdown, the first outside click only commits/restores and closes the dropdown. Nothing underneath receives that click; click again to open or activate the target.
+4. Escape restores the original value. Enter and Tab commit/restore and move selection without editing the destination.
+5. Invalid input never traps the technician. Destructive call-note clearing still confirms, and a real database-save failure still displays its existing notice.
+6. Ctrl+Z undoes the last field edit, in the grid or the drawer. It applies straight away on the row you are on; an edit belonging to another row warns first and needs a second press. Holding the key does nothing extra. Every undo scrolls to the row, flashes what changed, and names what it restored — so an undo is never something that happened off-screen. Inside an open editor, Ctrl+Z stays text-undo.
+
+---
+
 ## Flow 2: The Core Loop — Working One Refill
 
 This is the flow the technician repeats dozens of times a day. Entry points: a card in the Opportunities panel (high-value first), or the next unresolved row in the grid (typically filtered to today).

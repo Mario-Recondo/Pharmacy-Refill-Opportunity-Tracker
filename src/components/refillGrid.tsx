@@ -8,6 +8,7 @@ import {
   AllCommunityModule,
   ModuleRegistry,
   type CellClassParams,
+  type CellClickedEvent,
   type CellValueChangedEvent,
   type ColDef,
   type GridApi,
@@ -21,6 +22,12 @@ import { STATUSES, type EditableField, type Lookup, type Lookups, type RefillRow
 import { copayColor, formatMoney, profitStyle, textColorFor } from "../lib/colors";
 import { confirmDestructive } from "../lib/confirmDialog";
 import { insuranceDisplayName, noteQualifiesForCallNote } from "../lib/rules";
+import {
+  parseMoneyEdit,
+  parseNonNegativeIntegerEdit,
+} from "../lib/gridValidation";
+import { describeFieldValue, type UndoStep } from "../lib/undoStack";
+import { useUndoController } from "./UndoProvider";
 import {
   InsuranceRenderer,
   PillSelectEditor,
@@ -59,9 +66,28 @@ export function sortItems(items: PillItem[]): PillItem[] {
   return [...items].sort((a, b) => String(a.label).localeCompare(String(b.label), undefined, { sensitivity: "base" }));
 }
 
-// dropdown cells open on a single click (technician feedback, 2026-07-11);
-// text/numeric cells keep double-click so a stray click doesn't start an edit
-export const DROPDOWN_FIELDS = new Set(["insurance_id", "secondary_id", "refill_note_id", "call_note_id", "status"]);
+/**
+ * Opens the editor for a clicked editable cell — one click starts an edit
+ * (revised click model, 2026-07-23).
+ *
+ * This drives the edit through the grid API instead of `singleClickEdit`, which
+ * only starts an edit when `event.detail === 1`. The browser keeps incrementing
+ * that click counter while consecutive clicks stay near each other in time and
+ * space, so under `singleClickEdit` every rapid re-click is refused — including
+ * the second click the overlay outside-click rule requires. `startEditingCell`
+ * does not consult the click counter, so the open no longer depends on how fast
+ * the technician clicks or whether the mouse moved.
+ */
+export function startEditOnClick(e: CellClickedEvent<RefillRow>): void {
+  if (e.rowIndex == null || !e.column || !e.node) return;
+  if (!e.column.isCellEditable(e.node)) return;
+  const colKey = e.column.getColId();
+  const alreadyEditing = e.api
+    .getEditingCells()
+    .some((cell) => cell.rowIndex === e.rowIndex && cell.column?.getColId() === colKey);
+  if (alreadyEditing) return;
+  e.api.startEditingCell({ rowIndex: e.rowIndex, colKey });
+}
 
 export interface RefillColOpts {
   /** story 1.9: the Nimble Link day counter renders only in the month grid */
@@ -76,12 +102,8 @@ export function refillCols(lookups: Lookups, opts: RefillColOpts) {
   };
   const lookupName = (list: Lookup[]) => (p: ValueFormatterParams<RefillRow>) =>
     list.find((l) => l.id === p.value)?.name ?? "";
-  const moneyParser = (p: ValueParserParams<RefillRow>) => {
-    const t = String(p.newValue ?? "").replace(/[$,\s]/g, "");
-    if (t === "") return null;
-    const n = Number(t);
-    return Number.isFinite(n) ? n : p.oldValue;
-  };
+  const moneyParser = (p: ValueParserParams<RefillRow>) =>
+    parseMoneyEdit(p.newValue, p.oldValue);
   const copayCol = (field: "old_copay" | "new_copay", headerName: string): ColDef<RefillRow> => ({
     field,
     headerName,
@@ -137,6 +159,10 @@ export function refillCols(lookups: Lookups, opts: RefillColOpts) {
       editable: true,
       cellEditor: PillSelectEditor,
       cellEditorPopup: true,
+      // keep the popup clear of the cursor that opened it: AG Grid's default
+      // 'over' renders it on top of the cell, so a second click landed on an
+      // option and silently committed it (reproduced 2026-07-24)
+      cellEditorPopupPosition: "under",
       cellEditorParams: { items: toInsuranceItems(lookups.insurances), allowClear: true },
       cellRenderer: InsuranceRenderer, // logo-or-plain + designation suffix (story 4.5)
       comparator: (a, b) => {
@@ -151,6 +177,10 @@ export function refillCols(lookups: Lookups, opts: RefillColOpts) {
       editable: true,
       cellEditor: PillSelectEditor,
       cellEditorPopup: true,
+      // keep the popup clear of the cursor that opened it: AG Grid's default
+      // 'over' renders it on top of the cell, so a second click landed on an
+      // option and silently committed it (reproduced 2026-07-24)
+      cellEditorPopupPosition: "under",
       cellEditorParams: { items: sortItems(toItems(lookups.secondaryCoverages)), allowClear: true },
       cellRenderer: SecondaryRenderer,
     } as ColDef<RefillRow>,
@@ -161,6 +191,10 @@ export function refillCols(lookups: Lookups, opts: RefillColOpts) {
       editable: true,
       cellEditor: PillSelectEditor,
       cellEditorPopup: true,
+      // keep the popup clear of the cursor that opened it: AG Grid's default
+      // 'over' renders it on top of the cell, so a second click landed on an
+      // option and silently committed it (reproduced 2026-07-24)
+      cellEditorPopupPosition: "under",
       cellEditorParams: { items: toItems(lookups.refillNotes), allowClear: true },
       ...(opts.nimbleCounter
         ? { cellRenderer: RefillNoteRenderer }
@@ -178,6 +212,10 @@ export function refillCols(lookups: Lookups, opts: RefillColOpts) {
       editable: (p) => noteQualifiesForCallNote(p.data?.refill_note_id, lookups),
       cellEditor: PillSelectEditor,
       cellEditorPopup: true,
+      // keep the popup clear of the cursor that opened it: AG Grid's default
+      // 'over' renders it on top of the cell, so a second click landed on an
+      // option and silently committed it (reproduced 2026-07-24)
+      cellEditorPopupPosition: "under",
       cellEditorParams: { items: toItems(lookups.callNotes), allowClear: true },
       valueFormatter: lookupName(lookups.callNotes),
       cellStyle: (p) => {
@@ -197,12 +235,8 @@ export function refillCols(lookups: Lookups, opts: RefillColOpts) {
       headerName: "Refills left",
       width: 85,
       editable: true,
-      valueParser: (p) => {
-        const t = String(p.newValue ?? "").trim();
-        if (t === "") return null;
-        const n = Number(t);
-        return Number.isInteger(n) && n >= 0 ? n : p.oldValue;
-      },
+      valueParser: (p) =>
+        parseNonNegativeIntegerEdit(p.newValue, p.oldValue),
       type: "rightAligned",
     } as ColDef<RefillRow>,
     status: {
@@ -212,6 +246,10 @@ export function refillCols(lookups: Lookups, opts: RefillColOpts) {
       editable: true,
       cellEditor: PillSelectEditor,
       cellEditorPopup: true,
+      // keep the popup clear of the cursor that opened it: AG Grid's default
+      // 'over' renders it on top of the cell, so a second click landed on an
+      // option and silently committed it (reproduced 2026-07-24)
+      cellEditorPopupPosition: "under",
       cellEditorParams: {
         items: STATUSES.map((s) => ({ value: s, label: s, color: lookups.settings.statusColors[s] ?? "#eeeeee" })),
         allowClear: false,
@@ -240,11 +278,15 @@ export function refillCols(lookups: Lookups, opts: RefillColOpts) {
  */
 export function useRefillCellEdit(lookups: Lookups, onMutated: () => void) {
   const revertingRef = useRef(false);
+  const { record } = useUndoController();
   return useCallback(
     async (e: CellValueChangedEvent<RefillRow>) => {
       if (revertingRef.current) return;
       const field = e.colDef.field as EditableField;
       const row = e.data;
+      // Captured before any write so an undo restores the pre-edit state, and
+      // recorded only once the write succeeds.
+      const undoSteps: UndoStep[] = [{ field, oldValue: e.oldValue }];
       const persist = async (f: EditableField, v: unknown) => {
         const res = await updateRefillField(row.id, f, v ?? null);
         if (res.refill_note_set_at !== undefined) row.refill_note_set_at = res.refill_note_set_at;
@@ -264,10 +306,19 @@ export function useRefillCellEdit(lookups: Lookups, onMutated: () => void) {
             revertingRef.current = false;
             return;
           }
+          // undone together with the refill note, never left wiped on its own
+          undoSteps.push({ field: "call_note_id", oldValue: row.call_note_id });
           row.call_note_id = null;
           await persist("call_note_id", null);
         }
         await persist(field, e.newValue);
+        record({
+          rowId: row.id,
+          rowLabel: `Rx ${row.rx_number}`,
+          fieldLabel: e.colDef.headerName ?? field,
+          restoredLabel: describeFieldValue(field, e.oldValue, lookups),
+          steps: undoSteps,
+        });
       } catch (err) {
         alert(`Save failed — the change was undone.\n${err}`);
         revertingRef.current = true;

@@ -6,13 +6,14 @@ import {
   type CellContextMenuEvent,
   type ColDef,
   type GridApi,
-  type GridReadyEvent,
   type RowClassParams,
 } from "ag-grid-community";
 import { loadMonth, loadMonthCounts, setCallListPin, todayIso } from "../data/refills";
 import { STATUSES, type Lookups, type RefillRow, type RefillStatus } from "../data/types";
-import { confirmDeleteRefill, DROPDOWN_FIELDS, dueLabel, refillCols, useDueDateSort, useRefillCellEdit } from "./refillGrid";
+import { confirmDeleteRefill, dueLabel, refillCols, startEditOnClick, useDueDateSort, useRefillCellEdit } from "./refillGrid";
 import { RowCtxMenu, type CtxMenuState, type GridCtx } from "./gridParts";
+import { useGridInteraction } from "./GridInteractionProvider";
+import { useUndoRefresh } from "./UndoProvider";
 import OpportunitiesPanel from "./OpportunitiesPanel";
 import RefillDrawer from "./RefillDrawer";
 import { insuranceDisplayName } from "../lib/rules";
@@ -75,6 +76,7 @@ export default function MonthView({ lookups, active, navRequest, onDataChanged, 
   const pendingFocusRef = useRef<{ id: number; open: boolean } | null>(null);
 
   const apiRef = useRef<GridApi<RefillRow> | null>(null);
+  const gridInteraction = useGridInteraction("month", apiRef);
   const { locked, toggleLock, resetSort, onSortChanged, isDayBreak } = useDueDateSort(apiRef);
 
   useEffect(() => {
@@ -85,6 +87,13 @@ export default function MonthView({ lookups, active, navRequest, onDataChanged, 
   useEffect(() => {
     loadMonthCounts().then(setMonthCounts).catch(console.error);
   }, []);
+
+  // an undo writes straight to the database, so pull the row back in
+  useUndoRefresh(
+    useCallback(() => {
+      loadMonth(ym).then(setRows).catch(console.error);
+    }, [ym]),
+  );
 
   // returning from another tab: edits there may have touched this month — reload, keeping filters
   const wasActiveRef = useRef(active);
@@ -329,10 +338,6 @@ export default function MonthView({ lookups, active, navRequest, onDataChanged, 
     ];
   }, [lookups, showSecondary]);
 
-  const onGridReady = useCallback((e: GridReadyEvent<RefillRow>) => {
-    apiRef.current = e.api;
-  }, []);
-
   const onCellClicked = useCallback((e: CellClickedEvent<RefillRow>) => {
     const field = e.colDef.field ?? "";
     // Drug / Due cells (not editable inline) open the detail drawer (story 2.2)
@@ -340,8 +345,7 @@ export default function MonthView({ lookups, active, navRequest, onDataChanged, 
       setDrawer({ kind: "edit", id: e.data.id });
       return;
     }
-    if (!DROPDOWN_FIELDS.has(field) || e.rowIndex == null) return;
-    e.api.startEditingCell({ rowIndex: e.rowIndex, colKey: e.column.getColId() });
+    startEditOnClick(e);
   }, []);
 
   // ----- toolbar data --------------------------------------------------------
@@ -455,16 +459,19 @@ export default function MonthView({ lookups, active, navRequest, onDataChanged, 
             context={ctxRef.current}
             getRowId={(p) => String(p.data.id)}
             defaultColDef={{ sortable: true, resizable: true }}
-            onGridReady={onGridReady}
+            onGridReady={gridInteraction.onGridReady}
+            onGridPreDestroyed={gridInteraction.onGridPreDestroyed}
+            onCellFocused={gridInteraction.onCellFocused}
+            onCellEditingStarted={gridInteraction.onCellEditingStarted}
+            onCellEditingStopped={gridInteraction.onCellEditingStopped}
             onSortChanged={onSortChanged}
             onCellClicked={onCellClicked}
             onCellContextMenu={onCellContextMenu}
             preventDefaultOnContextMenu={true}
             onCellValueChanged={onCellValueChanged}
             getRowClass={getRowClass}
-            stopEditingWhenCellsLoseFocus={true}
-            enterNavigatesVertically={true}
-            enterNavigatesVerticallyAfterEdit={true}
+            suppressStartEditOnTab={true}
+            invalidEditValueMode="revert"
             tooltipShowDelay={400}
             overlayNoRowsTemplate="No rows match the active filters"
           />

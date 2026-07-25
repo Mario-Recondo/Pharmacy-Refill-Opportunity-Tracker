@@ -30,10 +30,17 @@ Acceptance criteria:
 As a technician, I want to edit any field inline in the grid, so that logging my work is as fast as it was in Google Sheets.
 
 Acceptance criteria:
-- Insurance, Refill Note, Call Note, and Status cells edit via dropdowns showing each option in its designated color; a dropdown opens on a single click.
+- Insurance, Refill Note, Call Note, and Status cells edit via dropdowns showing each option in its designated color.
+- When no dropdown is open, one click starts editing an editable cell. Enter or typing also starts editing a selected cell; typing in a selected dropdown highlights the first case-insensitive prefix match.
+- Clicking outside a text/number editor commits a valid value or silently restores the original value when invalid, then opens the clicked editable cell or activates the clicked control in the same click.
+- Clicking outside an open dropdown commits/restores and closes it, but consumes that first click. The underlying cell, toolbar control, tab, drawer action, header, or other target requires a second click.
+- Escape restores the original value and keeps the cell selected. Enter and Tab commit/restore and move selection without entering edit mode in the destination cell.
 - Copay and profit cells accept numeric entry; cell colors update immediately per the tier rules.
 - Edits persist to the database immediately (no Save button, no data loss on crash or close).
+- Invalid entry never blocks navigation or shows an error; it silently restores the original value. A real database-save failure remains visible and restores the value.
+- A refill-note change that would clear an existing call note still requires its centered destructive confirmation.
 - Tab/arrow-key navigation between cells works, so the keyboard-heavy Sheets workflow carries over.
+- Ctrl+Z undoes a mis-clicked field edit (added 2026-07-24). It undoes without asking on the row currently focused; reaching an edit on a different row warns first and needs a second press to cross, and holding the key never walks the stack. Each undo scrolls to the row, flashes the changed cells, and says what it restored. A refill-note change that cleared a call note undoes both together. Deletion is not undoable (story 2.4).
 
 **1.4 — Copy an Rx number instantly**
 As a technician, I want to click any Rx # to copy it, so that I can paste it into PioneerRX search without retyping.
