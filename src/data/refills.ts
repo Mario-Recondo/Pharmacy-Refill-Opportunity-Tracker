@@ -70,13 +70,27 @@ export function todayIso(): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 
-/** Call List due-date window: today only; Mondays inherit the closed weekend. */
+/**
+ * Call List due-date window: **the previous due date, never today's** — the technician
+ * calls the day after a refill comes due (corrected 2026-07-26; the tab originally
+ * shipped filtered to today, which was wrong about her workflow). The pharmacy is
+ * fully closed Sat+Sun and Sat/Sun/Mon dues are all refilled on Monday, so the
+ * weekday map is:
+ *
+ *   Mon → Fri · Tue → Sat+Sun+Mon · Wed → Tue · Thu → Wed · Fri → Thu
+ *
+ * Every due date is therefore called on exactly one day, with no overlap and no gap.
+ * Sat/Sun are closed and never opened in practice; they fall through to the plain
+ * yesterday rule. Holidays stay manual via pinning — no automatic reach-back.
+ */
 export function callListWindow(todayIsoDate: string): { from: string; to: string } {
   const [y, m, d] = todayIsoDate.split("-").map(Number);
-  const today = new Date(y, m - 1, d);
-  const from = today.getDay() === 1 ? new Date(y, m - 1, d - 2) : today;
+  const dow = new Date(y, m - 1, d).getDay();
+  const back = dow === 1 ? 3 : 1; // Monday reaches past the closed weekend to Friday
+  const to = new Date(y, m - 1, d - back);
+  const from = dow === 2 ? new Date(y, m - 1, d - 3) : to; // Tuesday absorbs Sat+Sun
   const iso = (value: Date) => `${value.getFullYear()}-${String(value.getMonth() + 1).padStart(2, "0")}-${String(value.getDate()).padStart(2, "0")}`;
-  return { from: iso(from), to: todayIsoDate };
+  return { from: iso(from), to: iso(to) };
 }
 
 /** Client-side auto-membership check; keep this in lockstep with loadCallList's SQL arm. */

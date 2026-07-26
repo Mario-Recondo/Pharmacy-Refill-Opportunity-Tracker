@@ -1,4 +1,6 @@
-// Call List membership is auto-ready rows in today's due window, unioned with today's manual pins (recorded 2026-07-20).
+// Call List membership is auto-ready rows in today's due window — the *previous* due
+// date, since calls happen the day after a refill comes due (see callListWindow) —
+// unioned with today's manual pins (recorded 2026-07-20, window corrected 2026-07-26).
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AgGridReact } from "ag-grid-react";
@@ -109,7 +111,7 @@ export default function CallListView({ lookups, active, today, onOpenInMonth, on
         <button onClick={resetSort}>Reset sort</button>
       </div>
     </div>
-    {loaded && rows.length === 0 ? <div className="empty-month"><h2>No refills ready to call today</h2><p>Process today's refills in the Month grid, or right-click a row → Add to today's call list.</p></div> : <div className="grid-wrap">
+    {loaded && rows.length === 0 ? <div className="empty-month"><h2>No refills ready to call today</h2><p>Refills show up here the day after they come due. Process them in the Month grid, or right-click a row → Add to today's call list.</p></div> : <div className="grid-wrap">
       <AgGridReact<RefillRow> theme={themeQuartz} rowData={filteredRows} columnDefs={columnDefs} context={ctxRef.current} getRowId={(p) => String(p.data.id)} defaultColDef={{ sortable: true, resizable: true }} onGridReady={gridInteraction.onGridReady} onGridPreDestroyed={gridInteraction.onGridPreDestroyed} onCellFocused={gridInteraction.onCellFocused} onCellEditingStarted={gridInteraction.onCellEditingStarted} onCellEditingStopped={gridInteraction.onCellEditingStopped} onSortChanged={onSortChanged} onCellClicked={onCellClicked} onCellContextMenu={onCellContextMenu} preventDefaultOnContextMenu={true} onCellValueChanged={onCellValueChanged} getRowClass={getRowClass} suppressStartEditOnTab={true} invalidEditValueMode="revert" tooltipShowDelay={400} overlayNoRowsTemplate="No rows match the active filters" />
     </div>}
     {ctxMenu && <RowCtxMenu menu={ctxMenu} onDelete={deleteRow} onDismiss={() => setCtxMenu(null)} extraItems={extraItems} />}

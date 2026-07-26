@@ -254,9 +254,9 @@ Acceptance criteria:
 ## Epic 6: Call List (v3 — deferred)
 
 **6.1 — Work today's list**
-As a technician, I want a focused view of just today's due refills where I set outcomes, so that daily calling is a checklist rather than a spreadsheet hunt.
+As a technician, I want a focused view of just the refills I should be calling today where I set outcomes, so that daily calling is a checklist rather than a spreadsheet hunt.
 
-Note: pending technician preference, this ships either as a dedicated page or as a saved "Today" filter on the month grid. Both are views over the same refills table; no schema impact either way.
+Note: shipped as a dedicated tab (resolved 2026-07-20). "Today's list" means refills that came due **the previous business day** — she calls the day after a refill comes due (corrected 2026-07-26) — so Monday's list holds Friday's dues and Tuesday's holds Sat+Sun+Mon. Full window map and auto-membership predicate in §6 v3 of the design doc.
 
 **6.2 — Quick-add an associated Rx from a row**
 As a technician, I want to right-click a row and add an associated refillable Rx through a short form, so that a sibling prescription discovered mid-call gets tracked without filling out the whole drawer.
