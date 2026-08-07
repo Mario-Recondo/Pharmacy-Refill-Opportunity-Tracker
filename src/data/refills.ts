@@ -1,4 +1,5 @@
 import { executeAtomicBatch, getDb, serializeWrite, type SqlStatement } from "../db";
+import { measure } from "../lib/diagnostics";
 import {
   EDITABLE_FIELDS,
   type Drug,
@@ -22,10 +23,16 @@ function nextMonthStart(ym: string): string {
 }
 
 export async function loadMonth(ym: string): Promise<RefillRow[]> {
-  const db = await getDb();
-  return db.select<RefillRow[]>(
-    `${ROW_SELECT} WHERE r.due_date >= $1 AND r.due_date < $2 ORDER BY r.due_date, r.id`,
-    [`${ym}-01`, nextMonthStart(ym)],
+  return measure(
+    "query.month",
+    async () => {
+      const db = await getDb();
+      return db.select<RefillRow[]>(
+        `${ROW_SELECT} WHERE r.due_date >= $1 AND r.due_date < $2 ORDER BY r.due_date, r.id`,
+        [`${ym}-01`, nextMonthStart(ym)],
+      );
+    },
+    (rows) => ({ rows: rows.length }),
   );
 }
 
@@ -95,16 +102,22 @@ export function isCalledToday(callNoteSetAtIso: string | null, today: string): b
 }
 
 export async function loadCallList(today: string): Promise<RefillRow[]> {
-  const db = await getDb();
-  const { from, to } = callListWindow(today);
-  return db.select<RefillRow[]>(
-    `${ROW_SELECT}
+  return measure(
+    "query.call-list",
+    async () => {
+      const db = await getDb();
+      const { from, to } = callListWindow(today);
+      return db.select<RefillRow[]>(
+        `${ROW_SELECT}
      WHERE (r.status = 'Pending' AND r.new_copay IS NOT NULL AND r.new_profit IS NOT NULL
             AND r.new_profit >= 0 AND r.refills_left >= 1
             AND r.due_date >= $1 AND r.due_date <= $2)
         OR r.added_to_call_list_on = $3
      ORDER BY (r.new_profit IS NULL), r.new_profit DESC, r.id`,
-    [from, to, today],
+        [from, to, today],
+      );
+    },
+    (rows) => ({ rows: rows.length }),
   );
 }
 
@@ -123,12 +136,18 @@ export function setCallListPin(id: number, dateIso: string | null): Promise<void
  * lives only in its month grid (deliberate gap — nothing to do in between).
  */
 export async function loadOverdue(today: string): Promise<RefillRow[]> {
-  const db = await getDb();
-  return db.select<RefillRow[]>(
-    `${ROW_SELECT} WHERE (r.status = 'Pending' AND r.due_date < $1
+  return measure(
+    "query.overdue",
+    async () => {
+      const db = await getDb();
+      return db.select<RefillRow[]>(
+        `${ROW_SELECT} WHERE (r.status = 'Pending' AND r.due_date < $1
        AND (r.new_copay IS NULL OR r.new_profit IS NULL)) OR r.status = 'MISSED'
      ORDER BY r.due_date, r.id`,
-    [today],
+        [today],
+      );
+    },
+    (rows) => ({ rows: rows.length }),
   );
 }
 
@@ -170,15 +189,27 @@ export function daysQuiet(setAtIso: string): number {
  * make. Default order: newest arrivals first (user decision).
  */
 export async function loadReqFollowUp(waitDays: number): Promise<RefillRow[]> {
-  const db = await getDb();
-  const rows = await db.select<RefillRow[]>(
-    `${ROW_SELECT}
+  // `fetched` vs `kept` is the point of this metric: the quiet-days threshold is
+  // applied in JS, not SQL, so every candidate row crosses the database boundary
+  // even when almost none qualify. A large gap is the signal that the filter
+  // belongs in the query.
+  let fetched = 0;
+  return measure(
+    "query.req-follow-up",
+    async () => {
+      const db = await getDb();
+      const rows = await db.select<RefillRow[]>(
+        `${ROW_SELECT}
      JOIN call_notes cn ON cn.id = r.call_note_id
      WHERE r.status = 'Pending' AND r.new_copay IS NOT NULL AND r.new_profit > 0
        AND cn.requires_followup = 1 AND r.call_note_set_at IS NOT NULL
      ORDER BY r.call_note_set_at DESC, r.id`,
+      );
+      fetched = rows.length;
+      return rows.filter((r) => daysQuiet(r.call_note_set_at!) > waitDays);
+    },
+    (kept) => ({ fetched, kept: kept.length }),
   );
-  return rows.filter((r) => daysQuiet(r.call_note_set_at!) > waitDays);
 }
 
 /** Req Follow Up tab badge — every listed row is actionable, so all of them count. */
@@ -208,7 +239,11 @@ export async function loadRefillEvents(refillId: number): Promise<RefillEvent[]>
  * could race the same way — now impossible for every write, SQL review M2).
  */
 export function sweepFollowupSpans(waitDays: number): Promise<void> {
-  return serializeWrite(() => doSweepFollowupSpans(waitDays));
+  // Worth watching because of how often it runs: launch, day rollover, and after
+  // EVERY persisted change (App.onDataChanged). It also re-runs the full
+  // Req Follow Up query and reads the entire span-event history each time, so
+  // its cost grows with the event log rather than with the edit that triggered it.
+  return measure("followup.sweep", () => serializeWrite(() => doSweepFollowupSpans(waitDays)));
 }
 
 async function doSweepFollowupSpans(waitDays: number): Promise<void> {
@@ -328,7 +363,13 @@ export function updateRefillField(
   field: EditableField,
   value: unknown,
 ): Promise<{ refill_note_set_at?: string | null; call_note_set_at?: string | null }> {
-  return serializeWrite(() => doUpdateRefillField(id, field, value));
+  // The most frequent write in the app — every inline cell edit and every drawer
+  // field lands here, and each one takes the write chain. The field name is safe
+  // to record (it is a column name, not a value) and tells you which edits are
+  // expensive: note and status changes do extra event-log work, plain ones don't.
+  return measure("refill.update-field", () => serializeWrite(() => doUpdateRefillField(id, field, value)), {
+    field,
+  });
 }
 
 async function doUpdateRefillField(

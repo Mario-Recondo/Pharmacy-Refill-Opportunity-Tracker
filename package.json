@@ -9,6 +9,7 @@
     "preview": "vite preview",
     "test": "vitest run",
     "check:migrations": "node scripts/check-migrations.mjs",
+    "check:prod-bundle": "node scripts/check-prod-bundle.mjs",
     "test:migration-guard": "node --test scripts/check-migrations.test.mjs",
     "tauri": "tauri"
   },

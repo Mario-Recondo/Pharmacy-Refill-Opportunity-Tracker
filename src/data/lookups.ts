@@ -1,4 +1,5 @@
 import { getDb } from "../db";
+import { measure } from "../lib/diagnostics";
 import type { AppSettings, InsuranceGroup, Lookup, Lookups } from "./types";
 
 // Vocabularies are data (design doc §4.3): loaded from SQLite, never hardcoded.
@@ -26,6 +27,14 @@ function parseSettings(rows: { key: string; value: string }[]): AppSettings {
 }
 
 export async function loadLookups(): Promise<Lookups> {
+  // Blocks first paint: App renders "Loading…" until this resolves, and it is
+  // also the call that triggers the very first Database.load — so on a cold
+  // start this number includes opening the file and running any pending
+  // migrations. Re-run on every Settings change, so it shows up twice over.
+  return measure("startup.lookups", loadLookupBundle);
+}
+
+async function loadLookupBundle(): Promise<Lookups> {
   const db = await getDb();
   const [insurances, insuranceGroups, secondaryCoverages, refillNotes, callNotes, settingRows] =
     await Promise.all([

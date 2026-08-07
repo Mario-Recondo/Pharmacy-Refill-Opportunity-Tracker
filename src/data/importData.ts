@@ -1,4 +1,5 @@
 import { executeAtomicBatch, getDb, serializeWrite, type SqlStatement } from "../db";
+import { measure } from "../lib/diagnostics";
 import type { ImportCommitPlan, ExistingRefill } from "./importPlan";
 
 export interface ImportResult { inserted: number; updated: number; skipped: number; errors: number; outsideCurrentMonth?: number; }
@@ -35,6 +36,25 @@ export async function loadSavedColumnMapping(): Promise<Record<string,string>|nu
 }
 
 export async function commitImport(plan: ImportCommitPlan): Promise<ImportResult> {
+  // The largest single operation in the app, and the one most likely to feel
+  // slow. Note it runs a per-row staleness check (a query per row, plus one per
+  // alias and per new drug) BEFORE the single atomic batch — so comparing this
+  // duration against the db.transaction it contains tells you how much of the
+  // wall time is the batch versus the checks that precede it.
+  return measure(
+    "import.commit",
+    () => commitImportPlan(plan),
+    (result) => ({
+      planned: plan.rows.length,
+      inserted: result.inserted,
+      updated: result.updated,
+      skipped: result.skipped,
+      errors: result.errors,
+    }),
+  );
+}
+
+async function commitImportPlan(plan: ImportCommitPlan): Promise<ImportResult> {
   return serializeWrite(async () => {
     const db=await getDb();
     const rx=[...new Set(plan.rows.map((r)=>r.row.rx_number).filter((x):x is string=>!!x))];
