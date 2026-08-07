@@ -33,6 +33,17 @@ Desktop tool (single-user, offline) for a pharmacy technician at an independent 
 - Lookup vocabularies (insurances, refill/call notes) are data, editable in Settings — never hardcode them in components
 - All edits persist immediately; no Save buttons. Confirmations only for destructive actions
 - Preserve pre-existing working-tree changes. Do not commit, push, merge, publish, create a release, or open a PR without explicit user authorization for that action. When authorized to commit, use a feature branch and never commit directly to `main`. Commit messages and PR text carry no AI-attribution lines (no "Co-Authored-By: Claude" or similar). Docs and decisions are folded into Design_docs as they're made
+- PR descriptions use three headed sections in this order — **What** (what the change does), **Why** (the reason for it), **Where** (which parts of the code changed) — written in plain language a non-engineer can follow on first read. In Where, name each file and say what it does and why it had to change, rather than listing paths. Close with a short Checks line giving test results. Reference PR: [#34](https://github.com/Mario-Recondo/Pharmacy-Refill-Opportunity-Tracker/pull/34)
 - Never test migrations, automated UI flows, restore behavior, or seed data against the normal development or pharmacy database. Use an isolated temporary database or disposable copy; never delete, replace, restore, seed, or directly edit the normal database without explicit user authorization
 - Build releases from PowerShell. Run `scripts/release.ps1` only with explicit release authorization, from clean `main` after the intended changes are merged; never expose the signing key or password file
 - A decision that is costly to reverse, surprising to a future reader, AND a genuine trade-off gets an ADR in `Design_docs/adr/` (template + criteria in its README), written in the same PR as the decision. The design doc stays the spec of what is; ADRs record why
+
+## Agent skills
+
+### Issue tracker
+
+GitHub Issues on `Mario-Recondo/Pharmacy-Refill-Opportunity-Tracker` (private), via the `gh` CLI. Native sub-issues and issue dependencies are available. Creating, closing, or labelling an issue is an external action and needs explicit authorization, same as a commit or PR. See `docs/agents/issue-tracker.md`.
+
+### Domain docs
+
+Single-context. `Design_docs/refill-tracker-design.md` is the domain model and ADRs live in `Design_docs/adr/` — **not** `docs/adr/`. See `docs/agents/domain.md`.

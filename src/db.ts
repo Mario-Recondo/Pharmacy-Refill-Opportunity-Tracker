@@ -1,5 +1,6 @@
 import Database from "@tauri-apps/plugin-sql";
 import { invoke } from "@tauri-apps/api/core";
+import { DIAGNOSTICS_ENABLED, measure, recordDuration } from "./lib/diagnostics";
 
 const DB_URL = "sqlite:refills.db";
 
@@ -39,7 +40,17 @@ export function resetDb(): void {
 let writeChain: Promise<unknown> = Promise.resolve();
 
 export function serializeWrite<T>(op: () => Promise<T>): Promise<T> {
-  const run = writeChain.then(op);
+  // How long this write sat behind the ones already queued. Because every write
+  // in the app funnels through here, this number IS the app's global write
+  // bottleneck — and nothing else surfaces it. A rising queue wait means writes
+  // are arriving faster than SQLite is retiring them.
+  const queuedAt = DIAGNOSTICS_ENABLED ? performance.now() : 0;
+  const run = writeChain.then(() => {
+    if (DIAGNOSTICS_ENABLED) {
+      recordDuration("db.write-queue-wait", performance.now() - queuedAt);
+    }
+    return op();
+  });
   writeChain = run.catch(() => {}); // a failed write must not wedge the chain
   return run;
 }
@@ -58,10 +69,19 @@ export interface SqlStatement {
  */
 export async function executeAtomicBatch(statements: SqlStatement[]): Promise<void> {
   if (statements.length === 0) return;
-  const conn = await getDb(); // ensure the pool exists (and migrations ran) first
-  if (statements.length === 1) {
-    await conn.execute(statements[0].sql, statements[0].params);
-    return;
-  }
-  await invoke("execute_batch", { db: DB_URL, statements });
+  // Statement count is the useful dimension here: it separates a cheap two-part
+  // edit from a thousand-statement import commit, which is the difference
+  // between a fast transaction and one worth optimising.
+  await measure(
+    "db.transaction",
+    async () => {
+      const conn = await getDb(); // ensure the pool exists (and migrations ran) first
+      if (statements.length === 1) {
+        await conn.execute(statements[0].sql, statements[0].params);
+        return;
+      }
+      await invoke("execute_batch", { db: DB_URL, statements });
+    },
+    { statements: statements.length },
+  );
 }

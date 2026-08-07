@@ -1,0 +1,203 @@
+/* Dev diagnostics panel. Imported only by DevDashboard.tsx, so this CSS is part
+   of the same dynamically-imported chunk and is likewise absent from release
+   builds. Uses the app's theme variables so it follows dark mode. */
+
+.devdash {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: min(720px, 92vw);
+  z-index: 9000;
+  display: flex;
+  flex-direction: column;
+  background: var(--surface, #fff);
+  color: var(--text, #1a1a1a);
+  border-left: 3px solid #b8860b;
+  box-shadow: -8px 0 24px rgb(0 0 0 / 25%);
+  font-size: 12px;
+}
+
+.devdash-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--border, #ddd);
+  background: var(--surface-2, #f6f6f6);
+}
+
+.devdash-header h2 {
+  margin: 0;
+  font-size: 14px;
+}
+
+.devdash-badge {
+  padding: 1px 7px;
+  border-radius: 9px;
+  background: #b8860b;
+  color: #fff;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.devdash-actions {
+  margin-left: auto;
+  display: flex;
+  gap: 6px;
+}
+
+.devdash-body {
+  overflow-y: auto;
+  padding: 12px 14px 20px;
+}
+
+.devdash-body section {
+  margin-bottom: 18px;
+}
+
+.devdash-body h3 {
+  margin: 0 0 6px;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-muted, #666);
+}
+
+.devdash-body h3 small {
+  margin-left: 6px;
+  font-weight: 400;
+  text-transform: none;
+  letter-spacing: 0;
+  opacity: 0.75;
+}
+
+.devdash-stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+  gap: 4px 14px;
+  margin: 0;
+}
+
+.devdash-stats div {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 3px 0;
+  border-bottom: 1px dotted var(--border, #e2e2e2);
+}
+
+.devdash-stats dt {
+  color: var(--text-muted, #666);
+}
+
+.devdash-stats dd {
+  margin: 0;
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+}
+
+.devdash-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-variant-numeric: tabular-nums;
+}
+
+.devdash-table th {
+  text-align: right;
+  font-weight: 600;
+  color: var(--text-muted, #666);
+  border-bottom: 1px solid var(--border, #ddd);
+  padding: 3px 6px;
+}
+
+.devdash-table td {
+  text-align: right;
+  padding: 3px 6px;
+  border-bottom: 1px solid var(--border-subtle, #f0f0f0);
+}
+
+.devdash-table th:first-child,
+.devdash-table td:first-child,
+.devdash-name,
+.devdash-meta,
+.devdash-error {
+  text-align: left;
+}
+
+.devdash-name {
+  font-family: ui-monospace, "Cascadia Mono", Consolas, monospace;
+}
+
+.devdash-meta,
+.devdash-error {
+  color: var(--text-muted, #666);
+  font-family: ui-monospace, "Cascadia Mono", Consolas, monospace;
+  font-size: 11px;
+}
+
+.devdash-error {
+  color: #b71c1c;
+}
+
+.devdash .bad {
+  color: #b71c1c;
+  font-weight: 700;
+}
+
+/* Anything carrying hover text gets a dotted underline and a help cursor, so
+   it is discoverable without a legend. Scoped to labels, headers and operation
+   names — buttons have titles too, and they should keep a pointer cursor. */
+.devdash-stats dt[title],
+.devdash-table th[title],
+.devdash-name[title] {
+  cursor: help;
+  text-decoration: underline dotted;
+  text-underline-offset: 3px;
+  text-decoration-color: var(--text-muted, #aaa);
+}
+
+.devdash-empty {
+  margin: 0;
+  color: var(--text-muted, #888);
+  font-style: italic;
+}
+
+.devdash-warn {
+  margin: 6px 0 0;
+  padding: 6px 8px;
+  border-left: 3px solid #b8860b;
+  background: rgb(184 134 11 / 10%);
+}
+
+.devdash-foot {
+  margin: 0;
+  padding-top: 10px;
+  border-top: 1px solid var(--border, #ddd);
+  color: var(--text-muted, #888);
+}
+
+/* Small launcher tab, bottom-right, so the panel is discoverable without
+   remembering the shortcut. Dev builds only, same as everything else here. */
+.devdash-launcher {
+  position: fixed;
+  right: 0;
+  bottom: 18px;
+  z-index: 8999;
+  padding: 5px 10px;
+  border: none;
+  border-radius: 4px 0 0 4px;
+  background: #b8860b;
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  cursor: pointer;
+  opacity: 0.55;
+}
+
+.devdash-launcher:hover {
+  opacity: 1;
+}
