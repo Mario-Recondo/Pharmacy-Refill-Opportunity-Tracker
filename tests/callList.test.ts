@@ -2,60 +2,69 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { autoQualifiesForCallList, callListWindow, isCalledToday, loadCallList, setCallListPin } from "../src/data/refills";
 import { freshDb, rawDb, seedRefill } from "./helpers/fakeTauri";
 
+// The technician calls the day AFTER a refill comes due, so the call day and the
+// due date it covers are never the same (corrected 2026-07-26). TODAY is a Friday;
+// the rows it should surface came due Thursday.
 const TODAY = "2026-07-17";
+const DUE = "2026-07-16";
 
 describe("Call List", () => {
   beforeEach(freshDb);
 
   it("includes a fully qualifying break-even row", async () => {
-    const id = seedRefill({ due: TODAY, new_copay: 10, new_profit: 0, refills_left: 1 });
+    const id = seedRefill({ due: DUE, new_copay: 10, new_profit: 0, refills_left: 1 });
     expect((await loadCallList(TODAY)).map((r) => r.id)).toEqual([id]);
   });
 
   it("excludes failures of each auto criterion", async () => {
-    seedRefill({ due: TODAY, new_copay: 10, new_profit: -0.01, refills_left: 1 });
-    seedRefill({ due: TODAY, new_copay: 10, new_profit: 1, refills_left: 0 });
-    seedRefill({ due: TODAY, new_copay: 10, new_profit: 1, refills_left: null });
-    seedRefill({ due: TODAY, new_profit: 1, refills_left: 1 });
-    seedRefill({ due: TODAY, new_copay: 10, refills_left: 1 });
-    seedRefill({ due: TODAY, status: "Checked Out", new_copay: 10, new_profit: 1, refills_left: 1 });
-    seedRefill({ due: TODAY, status: "MISSED", new_copay: 10, new_profit: 1, refills_left: 1 });
-    seedRefill({ due: "2026-07-18", new_copay: 10, new_profit: 1, refills_left: 1 });
-    seedRefill({ due: "2026-07-16", new_copay: 10, new_profit: 1, refills_left: 1 });
+    seedRefill({ due: DUE, new_copay: 10, new_profit: -0.01, refills_left: 1 });
+    seedRefill({ due: DUE, new_copay: 10, new_profit: 1, refills_left: 0 });
+    seedRefill({ due: DUE, new_copay: 10, new_profit: 1, refills_left: null });
+    seedRefill({ due: DUE, new_profit: 1, refills_left: 1 });
+    seedRefill({ due: DUE, new_copay: 10, refills_left: 1 });
+    seedRefill({ due: DUE, status: "Checked Out", new_copay: 10, new_profit: 1, refills_left: 1 });
+    seedRefill({ due: DUE, status: "MISSED", new_copay: 10, new_profit: 1, refills_left: 1 });
+    seedRefill({ due: TODAY, new_copay: 10, new_profit: 1, refills_left: 1 }); // due today — called tomorrow
+    seedRefill({ due: "2026-07-15", new_copay: 10, new_profit: 1, refills_left: 1 }); // already called yesterday
     expect(await loadCallList(TODAY)).toEqual([]);
   });
 
-  it("rolls Monday back through Saturday and Sunday only", async () => {
+  it("maps every call day to the due date it covers, exactly once", async () => {
+    const thu = seedRefill({ due: "2026-07-16", new_copay: 1, new_profit: 1, refills_left: 1 });
+    const fri = seedRefill({ due: "2026-07-17", new_copay: 1, new_profit: 1, refills_left: 1 });
     const sat = seedRefill({ due: "2026-07-18", new_copay: 1, new_profit: 1, refills_left: 1 });
     const sun = seedRefill({ due: "2026-07-19", new_copay: 1, new_profit: 1, refills_left: 1 });
     const mon = seedRefill({ due: "2026-07-20", new_copay: 1, new_profit: 1, refills_left: 1 });
-    const fri = seedRefill({ due: "2026-07-17", new_copay: 1, new_profit: 1, refills_left: 1 });
-    expect(fri).toBeGreaterThan(mon); // seeded last; keeps the id-ordered expectation honest
-    // Monday pulls Sat+Sun+Mon (all equal profit, so id order), never Friday
-    expect((await loadCallList("2026-07-20")).map((r) => r.id)).toEqual([sat, sun, mon]);
-    // Tuesday is a plain today=only window: none of Sat/Sun/Mon carry over
-    expect((await loadCallList("2026-07-21")).map((r) => r.id)).toEqual([]);
+    // equal profit throughout, so the expectations below are id-ordered
+    expect((await loadCallList("2026-07-17")).map((r) => r.id)).toEqual([thu]); // Fri calls Thu
+    expect((await loadCallList("2026-07-20")).map((r) => r.id)).toEqual([fri]); // Mon reaches back over the weekend to Fri
+    expect((await loadCallList("2026-07-21")).map((r) => r.id)).toEqual([sat, sun, mon]); // Tue absorbs Sat+Sun+Mon
+    expect((await loadCallList("2026-07-22")).map((r) => r.id)).toEqual([]); // Wed calls Tue — nothing due
   });
 
   it("computes pure local window boundaries", () => {
-    expect(callListWindow("2026-07-20")).toEqual({ from: "2026-07-18", to: "2026-07-20" });
-    expect(callListWindow("2026-07-21")).toEqual({ from: "2026-07-21", to: "2026-07-21" });
+    expect(callListWindow("2026-07-17")).toEqual({ from: "2026-07-16", to: "2026-07-16" }); // Fri → Thu
+    expect(callListWindow("2026-07-20")).toEqual({ from: "2026-07-17", to: "2026-07-17" }); // Mon → Fri
+    expect(callListWindow("2026-07-21")).toEqual({ from: "2026-07-18", to: "2026-07-20" }); // Tue → Sat..Mon
+    expect(callListWindow("2026-07-22")).toEqual({ from: "2026-07-21", to: "2026-07-21" }); // Wed → Tue
+    // reaching back across a month boundary (Tue 2026-09-01 → Sat 08-29 .. Mon 08-31)
+    expect(callListWindow("2026-09-01")).toEqual({ from: "2026-08-29", to: "2026-08-31" });
   });
 
   it("unions an unconditional pin and returns overlap once", async () => {
     const pinned = seedRefill({ due: "2026-06-01", status: "MISSED", added_to_call_list_on: TODAY });
-    const both = seedRefill({ due: TODAY, new_copay: 1, new_profit: 2, refills_left: 1, added_to_call_list_on: TODAY });
+    const both = seedRefill({ due: DUE, new_copay: 1, new_profit: 2, refills_left: 1, added_to_call_list_on: TODAY });
     const ids = (await loadCallList(TODAY)).map((r) => r.id);
     expect(ids).toEqual([both, pinned]);
     expect(ids.filter((id) => id === both)).toHaveLength(1);
   });
 
   it("sorts profit descending, nulls last, then id", async () => {
-    const high = seedRefill({ due: TODAY, new_copay: 1, new_profit: 300, refills_left: 1 });
+    const high = seedRefill({ due: DUE, new_copay: 1, new_profit: 300, refills_left: 1 });
     // two rows at equal profit ($50) prove the id tie-break, not accidental insert order
-    const tieA = seedRefill({ due: TODAY, new_copay: 1, new_profit: 50, refills_left: 1 });
-    const tieB = seedRefill({ due: TODAY, new_copay: 1, new_profit: 50, refills_left: 1 });
-    const zero = seedRefill({ due: TODAY, new_copay: 1, new_profit: 0, refills_left: 1 });
+    const tieA = seedRefill({ due: DUE, new_copay: 1, new_profit: 50, refills_left: 1 });
+    const tieB = seedRefill({ due: DUE, new_copay: 1, new_profit: 50, refills_left: 1 });
+    const zero = seedRefill({ due: DUE, new_copay: 1, new_profit: 0, refills_left: 1 });
     const nil = seedRefill({ due: "2026-01-01", added_to_call_list_on: TODAY });
     expect(tieB).toBeGreaterThan(tieA); // equal profit → ascending id
     expect((await loadCallList(TODAY)).map((r) => r.id)).toEqual([high, tieA, tieB, zero, nil]);
@@ -82,11 +91,11 @@ describe("Call List", () => {
   });
 
   it("matches the SQL auto arm on shared fixtures, included and excluded alike", async () => {
-    seedRefill({ due: TODAY, new_copay: 1, new_profit: 0, refills_left: 1 }); // in
-    seedRefill({ due: TODAY, new_copay: 1, new_profit: -1, refills_left: 1 }); // out: loss
-    seedRefill({ due: "2026-07-18", new_copay: 1, new_profit: 3, refills_left: 1 }); // out: tomorrow
-    seedRefill({ due: TODAY, new_copay: 1, new_profit: 3, refills_left: null }); // out: unknown refills
-    seedRefill({ due: TODAY, status: "Checked Out", new_copay: 1, new_profit: 3, refills_left: 2 }); // out: done
+    seedRefill({ due: DUE, new_copay: 1, new_profit: 0, refills_left: 1 }); // in
+    seedRefill({ due: DUE, new_copay: 1, new_profit: -1, refills_left: 1 }); // out: loss
+    seedRefill({ due: TODAY, new_copay: 1, new_profit: 3, refills_left: 1 }); // out: due today, called tomorrow
+    seedRefill({ due: DUE, new_copay: 1, new_profit: 3, refills_left: null }); // out: unknown refills
+    seedRefill({ due: DUE, status: "Checked Out", new_copay: 1, new_profit: 3, refills_left: 2 }); // out: done
     const all = rawDb()
       .prepare("SELECT id, status, due_date, new_copay, new_profit, refills_left, added_to_call_list_on FROM refills")
       .all() as unknown as import("../src/data/types").RefillRow[];

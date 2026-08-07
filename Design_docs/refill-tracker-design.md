@@ -45,7 +45,7 @@ In the spreadsheet, each month is a cloned tab. In this tool, **there is exactly
 
 - Per-Rx **history across months** (past profits, past call outcomes) shown in the detail drawer. (Strictly per Rx number — the data holds no patient identity, so drug-level grouping would mix patients; see story 2.3. Drug-level aggregation is reserved for v3 analytics.)
 - The **Opportunities/alerts** feature, which needs last-fill profit for an Rx coming due.
-- The planned **Call List** page, which the user described as "the month tab filtered to today" — it is literally the same table with `due_date = today`, so it costs nothing architecturally and its UI can be built later (see Roadmap).
+- The planned **Call List** page, which the user described as "the month tab filtered to today" — it is literally the same table filtered to a small due-date window (the *previous* due date, since calls happen the day after; see §6 v3), so it costs nothing architecturally and its UI can be built later (see Roadmap).
 - Future analytics (top drugs by profit, trends) as plain SQL queries.
 
 The month view is the default UI, with a month picker; a day filter within it is trivial.
@@ -275,13 +275,23 @@ Append-only workflow log (added by migration 004, 2026-07-15; ADR 0002): `id, re
 - **Call List tab** (grill interview 2026-07-20 — full decision record; resolves Open Question #1 in favor of a **dedicated tab**, nav position second: Month · Call List · Req Follow Up · Overdue · Settings; the month grid's "Today" button stays as grid navigation):
   - **Purpose: the "ready" call worklist** — rows already processed (insurance run, copay + profit known) where the patient must be called to arrange payment/pickup. Provably the inverse of Overdue (which requires `new_copay` OR `new_profit` empty), so the two auto-lists are disjoint.
   - **Auto-membership predicate** (ALL of): `status = 'Pending'` · `new_copay IS NOT NULL` · `new_profit IS NOT NULL` · `new_profit >= 0` (break-even included — patient service; deliberately looser than Req Follow Up's `> 0`; losses never auto-appear) · `refills_left >= 1` (0 needs MD authorization — different workflow; **NULL is excluded** — unknown ≠ ready) · due-date window below.
-  - **Due-date window** (pharmacy is fully closed Sat+Sun; hardcoded weekday rule, no calendar config): non-Monday → `due_date = today` (local calendar date via `todayIso()`); **Monday → today ∪ previous Saturday ∪ previous Sunday**. Day rollover re-derives membership via the existing timer; no stored state. **Holidays are handled manually** via pinning — no automatic reach-back.
+  - **Due-date window — calls happen the day *after* a refill comes due** (technician correction 2026-07-26; the tab originally shipped filtered to `due_date = today`, which misread her workflow). Two facts fix the whole map: the pharmacy is **fully closed Sat+Sun**, and Sat/Sun/Mon dues are **all refilled on Monday**. Hardcoded weekday rule, no calendar config:
+
+    | Call day | Due dates shown | Offset from today |
+    | --- | --- | --- |
+    | Mon | Fri | −3 |
+    | Tue | Sat, Sun, Mon | −3 … −1 |
+    | Wed | Tue | −1 |
+    | Thu | Wed | −1 |
+    | Fri | Thu | −1 |
+
+    Every due date is therefore called on **exactly one day** — no overlap, no gap. Note the weekend reach-back sits on **Tuesday**, not Monday; Monday is a plain single-day window pointing at Friday. Today's own due date never appears (it is called tomorrow), so the tab is never a same-day queue. Local calendar dates via `todayIso()`; Sat/Sun are closed and never opened in practice, falling through to the plain −1 rule. Day rollover re-derives membership via the existing timer; no stored state. **Holidays are handled manually** via pinning — no automatic reach-back. Single source of truth: `callListWindow()` in `src/data/refills.ts`, read by both the SQL arm and the client-side predicate.
   - **Manual pin — unconditional override**: Month-grid row context menu gains **"Add to today's call list"** — pins ANY row onto today's list regardless of every criterion (never a no-op; serves the holiday hatch AND §7/Flow 8's promised pull-Overdue-rows-in). Persistence: new nullable `refills.added_to_call_list_on DATE`; pinned iff `= today`; survives restart, falls off at rollover with zero cleanup; re-pin re-stamps. **"Remove from today's call list" only un-pins manual pins** — auto rows cannot be dismissed (no hidden/suppressed state); they leave only via Checked Out or rollover. Pinned rows carry a small **pin indicator** (icon/rail accent) — a pinned-but-unprocessed row reads "here because I put it here"; its empty money cells already signal not-ready.
   - **Stay-all-day + called marker**: rows stay visible all day (list = today's roster, not a shrinking queue). "Called today" = `call_note_set_at` is today (a prior day's note does NOT count) → row renders **dimmed at opacity .45, business colors dimmed never recolored** (the MISSED visual language). Rows leave only via Checked Out, rollover, or un-pin. Pinned rows behave identically.
   - **No badge** on the tab (deliberate exception among worklist tabs — it's a morning destination, not an alert).
   - **Sort**: `new_profit` DESC (money first, matching Opportunities), NULL-profit rows last, stable tie-break; dimmed and pinned rows sort **in place** — no grouping.
-  - **Columns: identical to the Month grid** (decided 2026-07-13 and reaffirmed: pulled-in rows keep the month-grid column set; Overdue's *Days over* never carries). Due Date stays visible — meaningful on Mondays.
-  - **Empty state**: "No refills ready to call today" + hint teaching the pin gesture ("Process today's refills in the Month grid, or right-click a row → Add to today's call list").
+  - **Columns: identical to the Month grid** (decided 2026-07-13 and reaffirmed: pulled-in rows keep the month-grid column set; Overdue's *Days over* never carries). Due Date stays visible — meaningful on Tuesdays, when three due dates share the list.
+  - **Empty state**: "No refills ready to call today" + hint teaching both the day-after rule and the pin gesture ("Refills show up here the day after they come due. Process them in the Month grid, or right-click a row → Add to today's call list").
   - **Everything hardcoded** — no Settings knobs (no weekend toggle, no closed-days config).
   - May overlap with Req Follow Up (different questions, different cadences) — **no suppression logic**.
 - **Quick-add an associated Rx** (technician feedback, 2026-07-11 — documented now, implemented with the Call List): right-clicking an existing row offers **"Add associated Rx"**, a simplified create form for a related refillable prescription (e.g., another Rx for the same patient surfaced during the call). Required fields: Rx #, medication name (autocomplete as in manual add), insurance, refill note; the **due date is pre-set from the selected row** rather than entered. Optional: old/new copay, old/new profit, refills filled, status, and the other drawer fields. Saves like any manual add (`source = manual`, duplicate Rx#+due-date check per Flow 4).
