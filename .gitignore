@@ -3,8 +3,13 @@ QUESTIONS.md
 INTERVIEW_PREP.md
 Refinements/
 
+# Source artwork for the insurance logos. The set the app ships is the
+# processed copy in src/assets/insurance-logos/, which IS tracked.
+Insurance-logos/
+
 # MCP test-harness output (snapshots, screenshots, console logs)
 .playwright-mcp/
+MCP-screenshots/
 
 # Dependencies / build output
 node_modules/
