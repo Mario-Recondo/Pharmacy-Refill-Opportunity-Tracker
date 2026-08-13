@@ -40,6 +40,11 @@
       "version": 8,
       "filename": "008_call_list.sql",
       "sha256": "f1f304d7f5d2beb6661609eed89f86e9d707a29f5e7f49cd0a0bab8756a6dcd9"
+    },
+    {
+      "version": 9,
+      "filename": "009_checked_out_at.sql",
+      "sha256": "bc34963b6c886effb006bd67acd0887aaaccbf7bfbbe66c20ae0a32c3d544d47"
     }
   ]
 }

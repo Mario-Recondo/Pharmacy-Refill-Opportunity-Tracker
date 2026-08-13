@@ -8,7 +8,7 @@ import {
   type GridApi,
   type RowClassParams,
 } from "ag-grid-community";
-import { loadMonth, loadMonthCounts, setCallListPin, todayIso } from "../data/refills";
+import { loadMonth, loadMonthCounts, loadMonthProfit, setCallListPin, todayIso } from "../data/refills";
 import { STATUSES, type Lookups, type RefillRow, type RefillStatus } from "../data/types";
 import { confirmDeleteRefill, dueLabel, refillCols, startEditOnClick, useDueDateSort, useRefillCellEdit } from "./refillGrid";
 import { RowCtxMenu, type CtxMenuState, type GridCtx } from "./gridParts";
@@ -18,6 +18,7 @@ import OpportunitiesPanel from "./OpportunitiesPanel";
 import RefillDrawer from "./RefillDrawer";
 import { insuranceDisplayName } from "../lib/rules";
 import ImportWizard from "./ImportWizard";
+import { formatMoney } from "../lib/colors";
 
 const MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
 
@@ -66,6 +67,7 @@ interface MonthViewProps {
 export default function MonthView({ lookups, active, navRequest, onDataChanged, onLookupsChanged }: MonthViewProps) {
   const [ym, setYm] = useState(currentYm);
   const [rows, setRows] = useState<RefillRow[]>([]);
+  const [monthProfit, setMonthProfit] = useState(0);
   const [monthCounts, setMonthCounts] = useState<Map<string, number>>(new Map());
   const [filters, setFilters] = useState<Filters>(NO_FILTERS);
   const [showSecondary, setShowSecondary] = useState(false);
@@ -79,10 +81,15 @@ export default function MonthView({ lookups, active, navRequest, onDataChanged, 
   const gridInteraction = useGridInteraction("month", apiRef);
   const { locked, toggleLock, resetSort, onSortChanged, isDayBreak } = useDueDateSort(apiRef);
 
+  const reloadMonthProfit = useCallback(() => {
+    loadMonthProfit(ym).then(setMonthProfit).catch(console.error);
+  }, [ym]);
+
   useEffect(() => {
     loadMonth(ym).then(setRows).catch((e) => alert(`Failed to load ${ym}: ${e}`));
+    reloadMonthProfit();
     setFilters(NO_FILTERS);
-  }, [ym]);
+  }, [ym, reloadMonthProfit]);
 
   useEffect(() => {
     loadMonthCounts().then(setMonthCounts).catch(console.error);
@@ -92,7 +99,8 @@ export default function MonthView({ lookups, active, navRequest, onDataChanged, 
   useUndoRefresh(
     useCallback(() => {
       loadMonth(ym).then(setRows).catch(console.error);
-    }, [ym]),
+      reloadMonthProfit();
+    }, [ym, reloadMonthProfit]),
   );
 
   // returning from another tab: edits there may have touched this month — reload, keeping filters
@@ -101,9 +109,10 @@ export default function MonthView({ lookups, active, navRequest, onDataChanged, 
     if (active && !wasActiveRef.current) {
       loadMonth(ym).then(setRows).catch((e) => alert(`Failed to reload ${ym}: ${e}`));
       loadMonthCounts().then(setMonthCounts).catch(console.error);
+      reloadMonthProfit();
     }
     wasActiveRef.current = active;
-  }, [active, ym]);
+  }, [active, ym, reloadMonthProfit]);
 
   const filteredRows = useMemo(
     () =>
@@ -161,22 +170,24 @@ export default function MonthView({ lookups, active, navRequest, onDataChanged, 
   const reloadAfterMove = useCallback(
     (id: number, dueDate: string, open: boolean) => {
       loadMonthCounts().then(setMonthCounts).catch(console.error);
+      reloadMonthProfit();
       pendingFocusRef.current = { id, open };
       const newYm = dueDate.slice(0, 7);
       if (newYm !== ym) setYm(newYm);
       else loadMonth(ym).then(setRows).catch((e) => alert(`Failed to reload ${ym}: ${e}`));
     },
-    [ym],
+    [ym, reloadMonthProfit],
   );
 
   /** drawer persisted a field on `row`; reloadMonth = other rows affected too (due-date move, Rx-wide drug fix) */
   const onRowEdited = useCallback(
     (row: RefillRow, reloadMonth: boolean) => {
       onDataChanged();
+      reloadMonthProfit();
       if (reloadMonth) reloadAfterMove(row.id, row.due_date, true);
       else setRows((prev) => [...prev]); // re-derive filters/shading from the mutated row
     },
-    [reloadAfterMove, onDataChanged],
+    [reloadAfterMove, onDataChanged, reloadMonthProfit],
   );
 
   const onCreated = useCallback(
@@ -251,8 +262,9 @@ export default function MonthView({ lookups, active, navRequest, onDataChanged, 
       onDataChanged();
       loadMonthCounts().then(setMonthCounts).catch(console.error);
       loadMonth(ym).then(setRows).catch((e) => alert(`Failed to reload ${ym}: ${e}`));
+      reloadMonthProfit();
     },
-    [ym, onDataChanged],
+    [ym, onDataChanged, reloadMonthProfit],
   );
 
   const onCellContextMenu = useCallback((e: CellContextMenuEvent<RefillRow>) => {
@@ -311,8 +323,9 @@ export default function MonthView({ lookups, active, navRequest, onDataChanged, 
 
   const onMutated = useCallback(() => {
     setRows((prev) => [...prev]); // re-derive filters/shading from the mutated row
+    reloadMonthProfit();
     onDataChanged();
-  }, [onDataChanged]);
+  }, [onDataChanged, reloadMonthProfit]);
 
   const onCellValueChanged = useRefillCellEdit(lookups, onMutated);
 
@@ -420,6 +433,12 @@ export default function MonthView({ lookups, active, navRequest, onDataChanged, 
         </div>
 
         <div className="toolbar-group">
+          <span
+            className={`month-profit${monthProfit < 0 ? " negative" : ""}`}
+            title="Profit from sales checked out this month (live New Profit; whole month, ignores filters)"
+          >
+            {MONTHS[Number(ym.slice(5, 7)) - 1]} Profits: {formatMoney(monthProfit)}
+          </span>
           <button className="add-refill" onClick={openCreate}>
             ＋ Add refill
           </button>
@@ -496,12 +515,13 @@ export default function MonthView({ lookups, active, navRequest, onDataChanged, 
             onClick: (row) => {
               setCallListPin(row.id, row.added_to_call_list_on === todayIso() ? null : todayIso())
                 .then(() => { setCtxMenu(null); loadMonth(ym).then(setRows); onDataChanged(); })
+                .then(() => { reloadMonthProfit(); })
                 .catch((e) => alert(`Failed to update call list pin: ${e}`));
             },
           }]}
         />
       )}
-      {importing && <ImportWizard lookups={lookups} visibleMonth={ym} onClose={() => setImporting(false)} onChanged={() => { setImporting(false); onLookupsChanged(); onDataChanged(); loadMonth(ym).then(setRows); loadMonthCounts().then(setMonthCounts); }} />}
+      {importing && <ImportWizard lookups={lookups} visibleMonth={ym} onClose={() => setImporting(false)} onChanged={() => { setImporting(false); onLookupsChanged(); onDataChanged(); loadMonth(ym).then(setRows); loadMonthCounts().then(setMonthCounts); reloadMonthProfit(); }} />}
 
       {drawer?.kind === "create" && (
         <RefillDrawer

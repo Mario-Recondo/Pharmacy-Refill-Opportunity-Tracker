@@ -36,6 +36,28 @@ export async function loadMonth(ym: string): Promise<RefillRow[]> {
   );
 }
 
+/** Local YYYY-MM for an ISO timestamp (sold-month bucketing; UTC would flip near midnight). */
+export function localYm(iso: string): string {
+  const d = new Date(iso);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+}
+
+/** Sum of live new_profit for rows CURRENTLY Checked Out whose check-out fell in `ym` (local). */
+export async function loadMonthProfit(ym: string): Promise<number> {
+  return measure(
+    "query.month-profit",
+    async () => {
+      const db = await getDb();
+      const rows = await db.select<{ new_profit: number; checked_out_at: string }[]>(
+        `SELECT new_profit, checked_out_at FROM refills
+         WHERE status = 'Checked Out' AND checked_out_at IS NOT NULL AND new_profit IS NOT NULL`,
+      );
+      return rows.reduce((sum, r) => (localYm(r.checked_out_at) === ym ? sum + r.new_profit : sum), 0);
+    },
+    (total) => ({ rows: 0, total }),
+  );
+}
+
 /** All rows sharing an Rx number, newest first — the drawer's history (story 2.3: strictly per rx_number). */
 export async function loadRxHistory(rxNumber: string): Promise<RefillRow[]> {
   const db = await getDb();
@@ -368,7 +390,10 @@ async function workflowEventStatement(
  * clock). New stamps are returned so callers keep in-memory rows in sync
  * without a reload. Refill-note, call-note and status changes also append to
  * the event log; a status change to Checked Out snapshots new_profit onto the
- * event ("profit made in <month>" analytics). The row update and its event-log
+ * event as the historical Activity record of what was verified at that moment
+ * (NOT the monthly-total source — that reads live new_profit bucketed by
+ * checked_out_at, see loadMonthProfit and ADR 0006). A real transition into
+ * Checked Out also stamps checked_out_at. The row update and its event-log
  * write commit as ONE transaction: a failure persists neither, so the UI's
  * revert-on-reject matches what the database did (SQL review M1).
  */
@@ -435,12 +460,23 @@ async function doUpdateRefillField(
     }
 
     // status
-    const writes: SqlStatement[] = [{
-      sql: "UPDATE refills SET status = $1, updated_at = datetime('now') WHERE id = $2",
-      params: [value, id],
-    }];
+    const newStatus = value as RefillStatus;
+    // `before` can be undefined (row not found); an optional-chain-only guard
+    // would incorrectly treat that as a transition into Checked Out.
+    const enteringCheckedOut =
+      before != null && before.status !== "Checked Out" && newStatus === "Checked Out";
+    const writes: SqlStatement[] = [
+      enteringCheckedOut
+        ? {
+            sql: "UPDATE refills SET status = $1, checked_out_at = $2, updated_at = datetime('now') WHERE id = $3",
+            params: [value, new Date().toISOString(), id],
+          }
+        : {
+            sql: "UPDATE refills SET status = $1, updated_at = datetime('now') WHERE id = $2",
+            params: [value, id],
+          },
+    ];
     if (before) {
-      const newStatus = value as RefillStatus;
       const profit = newStatus === "Checked Out" ? before.new_profit : null;
       const event = await workflowEventStatement(db, id, "status", before.status, newStatus, profit);
       if (event) writes.push(event);
@@ -570,15 +606,16 @@ async function doCreateRefill(input: NewRefill): Promise<number> {
   const nowIso = new Date().toISOString();
   const refillNoteSetAt = input.refill_note_id != null ? nowIso : null;
   const callNoteSetAt = input.call_note_id != null ? nowIso : null;
+  const checkedOutAt = input.status === "Checked Out" ? nowIso : null;
   const res = await db.execute(
     `INSERT INTO refills (rx_number, drug_id, due_date, insurance_id, secondary_id,
        old_copay, new_copay, old_profit, new_profit, refills_filled, refills_left,
-       refill_note_id, call_note_id, refill_note_set_at, call_note_set_at, status, notes, source)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, 'manual')`,
+       refill_note_id, call_note_id, refill_note_set_at, call_note_set_at, status, checked_out_at, notes, source)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, 'manual')`,
     [
       input.rx_number, input.drug_id, input.due_date, input.insurance_id, input.secondary_id,
       input.old_copay, input.new_copay, input.old_profit, input.new_profit, input.refills_filled, input.refills_left,
-      input.refill_note_id, input.call_note_id, refillNoteSetAt, callNoteSetAt, input.status, input.notes,
+      input.refill_note_id, input.call_note_id, refillNoteSetAt, callNoteSetAt, input.status, checkedOutAt, input.notes,
     ],
   );
   return res.lastInsertId as number;

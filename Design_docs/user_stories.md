@@ -95,6 +95,15 @@ Acceptance criteria:
 - The counter appears only in the month grid — not in the drawer, Opportunities cards, or the Overdue tab.
 - Setting the refill note away from and later back to Nimble Link restarts the count (the count reflects the most recent link sent).
 
+**1.10 — See profit made this month**
+As a technician, I want the Month toolbar to show the profit from refills sold this month, so that I can see the live result of completed work without filtering the grid.
+
+Acceptance criteria:
+- The toolbar shows `Month Profits: $x.xx`, summing live New Profit for currently Checked Out rows bucketed by their local check-out timestamp (`checked_out_at`), not by due date.
+- The figure ignores the active grid filters and updates after check-out, undo, edits, creates, deletes, imports, and profit changes.
+- A Checked Out row with no New Profit is excluded and shows a persistent circled `!` in its Status cell.
+- A soft warning for a no-profit check-out fires only for grid inline edit, drawer edit, and drawer create, with the choice to cancel before any write. Undo is EXEMPT from this warning; the persistent `!` flag is the backstop for an undone row that remains Checked Out without New Profit.
+
 ---
 
 ## Epic 2: Adding & Inspecting Refills (v1)

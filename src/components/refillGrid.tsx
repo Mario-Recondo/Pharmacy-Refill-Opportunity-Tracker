@@ -28,6 +28,7 @@ import {
 } from "../lib/gridValidation";
 import { describeFieldValue, type UndoStep } from "../lib/undoStack";
 import { useUndoController } from "./UndoProvider";
+import { StatusRenderer } from "./gridParts";
 import {
   InsuranceRenderer,
   PillSelectEditor,
@@ -254,6 +255,7 @@ export function refillCols(lookups: Lookups, opts: RefillColOpts) {
         items: STATUSES.map((s) => ({ value: s, label: s, color: lookups.settings.statusColors[s] ?? "#eeeeee" })),
         allowClear: false,
       },
+      cellRenderer: StatusRenderer,
       cellStyle: (p) => {
         const bg = lookups.settings.statusColors[p.value as string];
         return bg ? { backgroundColor: bg, color: textColorFor(bg) } : undefined;
@@ -310,6 +312,18 @@ export function useRefillCellEdit(lookups: Lookups, onMutated: () => void) {
           undoSteps.push({ field: "call_note_id", oldValue: row.call_note_id });
           row.call_note_id = null;
           await persist("call_note_id", null);
+        }
+        if (field === "status" && e.newValue === "Checked Out" && row.new_profit == null) {
+          const ok = await confirmDestructive(
+            "This refill has no New Profit, so nothing will be added to the monthly total. Mark it Checked Out anyway?",
+            { title: "No New Profit", action: "Check out anyway" },
+          );
+          if (!ok) {
+            revertingRef.current = true;
+            e.node.setDataValue(field, e.oldValue);
+            revertingRef.current = false;
+            return;
+          }
         }
         await persist(field, e.newValue);
         record({

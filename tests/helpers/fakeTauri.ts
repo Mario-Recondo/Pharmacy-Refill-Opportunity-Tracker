@@ -118,6 +118,7 @@ export interface SeedRefill {
   new_copay?: number | null;
   old_profit?: number | null;
   new_profit?: number | null;
+  checked_out_at?: string;
   refills_left?: number | null;
   added_to_call_list_on?: string | null;
   /** call note by NAME from the seeded vocabulary (e.g. "LVM+RSL") */
@@ -138,8 +139,8 @@ export function seedRefill(o: SeedRefill): number {
   const r = db
     .prepare(
       `INSERT INTO refills (rx_number, drug_id, due_date, status, old_copay, new_copay, old_profit, new_profit,
-         refills_left, added_to_call_list_on, refill_note_id, call_note_id, call_note_set_at, source)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, 'manual')`,
+          checked_out_at, refills_left, added_to_call_list_on, refill_note_id, call_note_id, call_note_set_at, source)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, 'manual')`,
     )
     .run({
       $1: o.rx ?? `9${String(++rxCounter).padStart(5, "0")}`,
@@ -150,11 +151,12 @@ export function seedRefill(o: SeedRefill): number {
       $6: o.new_copay ?? null,
       $7: o.old_profit ?? null,
       $8: o.new_profit ?? null,
-      $9: o.refills_left ?? null,
-      $10: o.added_to_call_list_on ?? null,
-      $11: refillNoteId,
-      $12: callNoteId,
-      $13: o.call_note_set_at ?? null,
+      $9: o.checked_out_at ?? null,
+      $10: o.refills_left ?? null,
+      $11: o.added_to_call_list_on ?? null,
+      $12: refillNoteId,
+      $13: callNoteId,
+      $14: o.call_note_set_at ?? null,
     });
   return Number(r.lastInsertRowid);
 }
