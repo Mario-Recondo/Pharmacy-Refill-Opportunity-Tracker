@@ -266,6 +266,12 @@ pub fn run() {
             sql: include_str!("../migrations/008_call_list.sql"),
             kind: MigrationKind::Up,
         },
+        Migration {
+            version: 9,
+            description: "checked_out_at",
+            sql: include_str!("../migrations/009_checked_out_at.sql"),
+            kind: MigrationKind::Up,
+        },
     ];
 
     tauri::Builder::default()

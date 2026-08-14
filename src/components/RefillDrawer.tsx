@@ -403,6 +403,16 @@ export default function RefillDrawer({ mode, lookups, profitMax, onClose, onRowE
         row.call_note_set_at = null;
         await updateRefillField(row.id, "call_note_id", null);
       }
+      if (field === "status" && value === "Checked Out" && row.new_profit == null) {
+        const ok = await confirmDestructive(
+          "This refill has no New Profit, so nothing will be added to the monthly total. Mark it Checked Out anyway?",
+          { title: "No New Profit", action: "Check out anyway" },
+        );
+        if (!ok) {
+          bump();
+          return false;
+        }
+      }
       const res = await updateRefillField(row.id, field, value ?? null);
       (row as unknown as Record<string, unknown>)[field] = value ?? null;
       if (res.refill_note_set_at !== undefined) row.refill_note_set_at = res.refill_note_set_at;
@@ -538,6 +548,13 @@ export default function RefillDrawer({ mode, lookups, profitMax, onClose, onRowE
         }
       }
       setNearDup(null);
+      if (draft.status === "Checked Out" && draft.new_profit == null) {
+        const ok = await confirmDestructive(
+          "This refill has no New Profit, so nothing will be added to the monthly total. Mark it Checked Out anyway?",
+          { title: "No New Profit", action: "Check out anyway" },
+        );
+        if (!ok) return;
+      }
       const drugId = draft.drug!.kind === "existing" ? draft.drug!.drug.id : await findOrCreateDrug(draft.drug!.name, draft.drug!.ndc);
       const id = await createRefill({
         rx_number: draft.rx_number.trim(),

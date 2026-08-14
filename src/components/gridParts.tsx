@@ -314,3 +314,13 @@ export function RefillNoteRenderer(props: CustomCellRendererProps<RefillRow>) {
     </span>
   );
 }
+
+export function StatusRenderer(props: CustomCellRendererProps<RefillRow>) {
+  const missing = props.value === "Checked Out" && props.data?.new_profit == null;
+  return (
+    <span className="status-cell">
+      <span>{props.value as string}</span>
+      {missing && <span className="profit-missing-flag" title="No New Profit recorded — not counted in the monthly total.">!</span>}
+    </span>
+  );
+}

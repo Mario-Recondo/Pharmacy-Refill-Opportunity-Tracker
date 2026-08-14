@@ -30,6 +30,7 @@ body,
   --disabled-text: #bbb;
   --urgent: #c1352b;
   --urgent-tint: #fbeae8;
+  --profit: #1b8a3a;      /* money figures (monthly profit total) — matches the profit-cell green */
 }
 
 body {
@@ -269,6 +270,16 @@ body {
   font-size: 13px;
   color: #666;
   white-space: nowrap;
+}
+
+.month-profit {
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+  color: var(--profit); /* money reads green */
+}
+.month-profit.negative {
+  color: var(--urgent); /* a losing month stays red, matching the profit-cell loss treatment */
 }
 
 /* ---- grid + opportunities sidebar ---- */
@@ -569,6 +580,23 @@ body {
 .nimble-days.stale {
   background: #c62828;
   color: #fff;
+}
+
+.status-cell {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.profit-missing-flag {
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  border: 1px solid currentColor;
+  border-radius: 50%;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 12px;
+  text-align: center;
 }
 
 .ag-cell.gated {
@@ -1491,6 +1519,7 @@ textarea:focus-visible {
   --disabled-text: #7e8791;
   --urgent: #e06a61;
   --urgent-tint: #3b2728;
+  --profit: #52c07a;      /* lighter green so money figures stay legible on the dark surface */
 }
 
 :root[data-theme="dark"] body {
