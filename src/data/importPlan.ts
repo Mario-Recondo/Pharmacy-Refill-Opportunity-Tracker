@@ -89,7 +89,7 @@ function money(v: ImportCell | null): { value: number|null; issue?: string } {
 export function parseRows(sheet: ImportSheet, mapping: ColumnMapping): ParsedImportRow[] {
   return sheet.rows.map((raw, rowIndex) => {
     const issues: string[] = []; const rxRaw = cell(raw, mapping, "rx_number");
-    let rx: string | null = null;
+    let rx: string | null;
     if (typeof rxRaw === "number") rx = Number.isInteger(rxRaw) ? String(rxRaw) : null;
     else rx = text(rxRaw);
     if (!rx) issues.push(Number.isFinite(rxRaw as number) && !Number.isInteger(rxRaw as number) ? "Rx number must be an integer" : "blank Rx number");
@@ -130,7 +130,7 @@ export function computeDispositions(rows: ParsedImportRow[], existing: ExistingR
     if (existingDrug && row.drug_name && norm(row.drug_name) !== norm(existingDrug.drug_name)) return { row, kind: "drug-conflict", reason: "Rx already belongs to a different medication", existing: existingDrug };
     const exact = siblings.find((e) => e.due_date === row.due_date);
     const fill = exact ? ["insurance_id","secondary_id","old_copay","old_profit","refills_filled","refills_left"].filter((f) => {
-      if ((exact as any)[f] != null) return false;
+      if ((exact as unknown as Record<string, unknown>)[f] != null) return false;
       if (f === "insurance_id" || f === "secondary_id") {
         const kind = f === "insurance_id" ? "insurance" as const : "secondary" as const;
         const raw = kind === "insurance" ? row.insurance : row.secondary;
@@ -138,7 +138,7 @@ export function computeDispositions(rows: ParsedImportRow[], existing: ExistingR
         if (!resolveValue) return true;
         return resolveValue(kind, raw) !== null; // null = remembered "leave blank": nothing to fill
       }
-      return (row as any)[f] != null;
+      return (row as unknown as Record<string, unknown>)[f] != null;
     }) : [];
     if (exact) return { row, kind: fill.length ? "update" : "no-change", existing: exact, fillFields: fill, action: fill.length ? "update" : "skip", finalDue: exact.due_date };
     // a drug-less row may still UPDATE a nearby candidate (existing medication
