@@ -85,7 +85,7 @@ function OpName({ name }: { name: string }) {
 export default function DevDashboard({ onClose }: { onClose: () => void }) {
   const [snapshot, setSnapshot] = useState<DiagnosticsSnapshot | null>(getDiagnosticsSnapshot);
   const [version, setVersion] = useState("—");
-  const [tick, setTick] = useState(Date.now());
+  const [tick, setTick] = useState(() => Date.now());
 
   useEffect(() => {
     const timer = setInterval(() => {

@@ -176,7 +176,11 @@ function MoneyField({
   tint?: { backgroundColor: string; color: string };
 }) {
   const [text, setText] = useState(value == null ? "" : String(value));
-  useEffect(() => setText(value == null ? "" : String(value)), [value]);
+  const [seen, setSeen] = useState(value);
+  if (value !== seen) {
+    setSeen(value);
+    setText(value == null ? "" : String(value));
+  }
   const revert = () => setText(value == null ? "" : String(value));
 
   const commit = async () => {
@@ -221,15 +225,16 @@ function DrugField({
   onPick: (sel: DrugPick) => void | boolean | Promise<void | boolean>;
 }) {
   const [text, setText] = useState(current?.name ?? "");
+  const [seenName, setSeenName] = useState(current?.name);
   const [open, setOpen] = useState(false);
   const [creating, setCreating] = useState(false);
   const [ndc, setNdc] = useState("");
 
   // follow external changes (e.g. create-mode "Use <existing drug>" from the Rx-conflict warning)
-  useEffect(() => {
+  if (current?.name !== seenName) {
+    setSeenName(current?.name);
     if (!open) setText(current?.name ?? "");
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [current?.name]);
+  }
 
   const matches = useMemo(() => {
     const q = text.trim().toLowerCase();
@@ -385,6 +390,7 @@ export default function RefillDrawer({ mode, lookups, profitMax, onClose, onRowE
     // Captured before any write; recorded only once the write succeeds.
     const oldValue = (row as unknown as Record<string, unknown>)[field];
     const undoSteps: UndoStep[] = [{ field, oldValue }];
+    let clearedCallNote = false;
     try {
       // call-note gating: never silently wipe a call note (story 1.5)
       if (field === "refill_note_id" && !noteQualifiesForCallNote(value as number | null, lookups) && row.call_note_id != null) {
@@ -399,9 +405,8 @@ export default function RefillDrawer({ mode, lookups, profitMax, onClose, onRowE
         }
         // undone together with the refill note, never left wiped on its own
         undoSteps.push({ field: "call_note_id", oldValue: row.call_note_id });
-        row.call_note_id = null;
-        row.call_note_set_at = null;
         await updateRefillField(row.id, "call_note_id", null);
+        clearedCallNote = true;
       }
       if (field === "status" && value === "Checked Out" && row.new_profit == null) {
         const ok = await confirmDestructive(
@@ -414,9 +419,13 @@ export default function RefillDrawer({ mode, lookups, profitMax, onClose, onRowE
         }
       }
       const res = await updateRefillField(row.id, field, value ?? null);
-      (row as unknown as Record<string, unknown>)[field] = value ?? null;
-      if (res.refill_note_set_at !== undefined) row.refill_note_set_at = res.refill_note_set_at;
-      if (res.call_note_set_at !== undefined) row.call_note_set_at = res.call_note_set_at;
+      const nextRow = {
+        ...row,
+        ...(clearedCallNote ? { call_note_id: null, call_note_set_at: null } : {}),
+        [field]: value ?? null,
+        ...(res.refill_note_set_at !== undefined ? { refill_note_set_at: res.refill_note_set_at } : {}),
+        ...(res.call_note_set_at !== undefined ? { call_note_set_at: res.call_note_set_at } : {}),
+      };
       record({
         rowId: row.id,
         rowLabel: `Rx ${row.rx_number}`,
@@ -425,9 +434,10 @@ export default function RefillDrawer({ mode, lookups, profitMax, onClose, onRowE
         steps: undoSteps,
       });
       setActivitySeq((s) => s + 1);
-      onRowEdited(row, false);
+      onRowEdited(nextRow, false);
       return true;
     } catch (err) {
+      if (clearedCallNote) onRowEdited({ ...row, call_note_id: null, call_note_set_at: null }, false);
       alert(`Save failed — the change was undone.\n${err}`);
       bump();
       return false;
@@ -452,8 +462,8 @@ export default function RefillDrawer({ mode, lookups, profitMax, onClose, onRowE
         return false;
       }
       await updateRefillCore(row.id, { rx_number: rx });
-      row.rx_number = rx;
-      onRowEdited(row, false);
+      const nextRow = { ...row, rx_number: rx };
+      onRowEdited(nextRow, false);
       return true;
     } catch (err) {
       alert(`Save failed — the change was undone.\n${err}`);
@@ -472,8 +482,8 @@ export default function RefillDrawer({ mode, lookups, profitMax, onClose, onRowE
         return false;
       }
       await updateRefillCore(row.id, { due_date: iso });
-      row.due_date = iso;
-      onRowEdited(row, true);
+      const nextRow = { ...row, due_date: iso };
+      onRowEdited(nextRow, true);
       return true;
     } catch (err) {
       alert(`Save failed — the change was undone.\n${err}`);
@@ -499,11 +509,9 @@ export default function RefillDrawer({ mode, lookups, profitMax, onClose, onRowE
       if (drugId === row.drug_id) return true;
       if (otherRows.length > 0) await updateRxDrug(row.rx_number, drugId);
       else await updateRefillCore(row.id, { drug_id: drugId });
-      row.drug_id = drugId;
-      row.drug_name = targetName;
-      row.ndc = sel.kind === "existing" ? sel.drug.ndc : sel.ndc;
+      const nextRow = { ...row, drug_id: drugId, drug_name: targetName, ndc: sel.kind === "existing" ? sel.drug.ndc : sel.ndc };
       // sibling rows changed too — reload the month so any of them visible in the grid update
-      onRowEdited(row, otherRows.length > 0);
+      onRowEdited(nextRow, otherRows.length > 0);
       return true;
     } catch (err) {
       alert(`Save failed — the change was undone.\n${err}`);
@@ -584,10 +592,15 @@ export default function RefillDrawer({ mode, lookups, profitMax, onClose, onRowE
   // ----- history (story 2.3: strictly per rx_number) -------------------------
 
   const [history, setHistory] = useState<RefillRow[] | null>(null);
+  const historyKey = editRow ? `${editRow.id}:${editRow.rx_number}` : null;
+  const [seenHistoryKey, setSeenHistoryKey] = useState(historyKey);
+  if (historyKey !== seenHistoryKey) {
+    setSeenHistoryKey(historyKey);
+    setHistory(null);
+  }
   useEffect(() => {
     if (!editRow) return;
     let stale = false;
-    setHistory(null);
     loadRxHistory(editRow.rx_number)
       .then((rows) => {
         if (!stale) setHistory(rows.filter((r) => r.id !== editRow.id));
@@ -652,6 +665,12 @@ export default function RefillDrawer({ mode, lookups, profitMax, onClose, onRowE
   };
 
   const notesValue = editRow ? editRow.notes ?? "" : draft.notes;
+  const [noteText, setNoteText] = useState(notesValue);
+  const [seenNotesValue, setSeenNotesValue] = useState(notesValue);
+  if (notesValue !== seenNotesValue) {
+    setSeenNotesValue(notesValue);
+    setNoteText(notesValue);
+  }
 
   return (
     <aside className="drawer" aria-label={editRow ? "Refill details" : "Add refill"}>
@@ -912,6 +931,7 @@ export default function RefillDrawer({ mode, lookups, profitMax, onClose, onRowE
               rows={3}
               defaultValue={notesValue}
               onChange={(e) => {
+                setNoteText(e.target.value);
                 if (!editRow) setDraft((d) => ({ ...d, notes: e.target.value }));
               }}
               onBlur={(e) => {
@@ -921,7 +941,7 @@ export default function RefillDrawer({ mode, lookups, profitMax, onClose, onRowE
               }}
             />
           </label>
-          {showNoteBubble && <div className="notes-bubble">{notesRef.current?.value}</div>}
+          {showNoteBubble && <div className="notes-bubble">{noteText}</div>}
         </div>
 
         {editRow && (

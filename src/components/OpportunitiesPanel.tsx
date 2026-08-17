@@ -129,7 +129,7 @@ export default function OpportunitiesPanel({
 
   const days = lookups.settings.alertLookaheadDays;
   const minProfit = lookups.settings.alertMinProfit;
-  const today = useMemo(todayIso, []);
+  const today = useMemo(() => todayIso(), []);
   const horizon = useMemo(() => addDaysIso(today, days), [today, days]);
 
   useEffect(() => {

@@ -185,7 +185,7 @@ export function useUndoController(): UndoController {
 export function useUndoRefresh(reload: () => void): void {
   const { registerRefresh } = useUndoController();
   const reloadRef = useRef(reload);
-  reloadRef.current = reload;
+  useEffect(() => { reloadRef.current = reload; });
   useEffect(
     () => registerRefresh(() => reloadRef.current()),
     [registerRefresh],

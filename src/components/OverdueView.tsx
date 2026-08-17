@@ -23,7 +23,7 @@ import { loadOverdue, todayIso } from "../data/refills";
 import { STATUSES, type Lookups, type RefillRow, type RefillStatus } from "../data/types";
 import { confirmDeleteRefill, dueLabel, refillCols, startEditOnClick, useDueDateSort, useRefillCellEdit } from "./refillGrid";
 import { useUndoRefresh } from "./UndoProvider";
-import { RowCtxMenu, type CtxMenuState, type GridCtx } from "./gridParts";
+import { RowCtxMenu, type CtxMenuState } from "./gridParts";
 import { useGridInteraction } from "./GridInteractionProvider";
 import RefillDrawer from "./RefillDrawer";
 import { insuranceDisplayName } from "../lib/rules";
@@ -110,16 +110,14 @@ export default function OverdueView({ lookups, active, onOpenInMonth, onDataChan
     return max;
   }, [filteredRows]);
 
-  const ctxRef = useRef<GridCtx>({ lookups, profitMax: 0 });
-  ctxRef.current.lookups = lookups;
-  ctxRef.current.profitMax = profitMax;
+  const gridContext = useMemo(() => ({ lookups, profitMax }), [lookups, profitMax]);
 
   useEffect(() => {
     // shading is relative to the visible set; day separators depend on neighbors —
     // both are computed at draw time, so redraw when the visible set changes
     apiRef.current?.refreshCells({ force: true });
     apiRef.current?.redrawRows();
-  }, [filteredRows, profitMax]);
+  }, [filteredRows, profitMax, gridContext]);
 
   // any persisted change: refresh the badge and requery — resolved rows leave the tab here
   const onMutated = useCallback(() => {
@@ -298,7 +296,7 @@ export default function OverdueView({ lookups, active, onOpenInMonth, onDataChan
             theme={themeQuartz}
             rowData={filteredRows}
             columnDefs={columnDefs}
-            context={ctxRef.current}
+            context={gridContext}
             getRowId={(p) => String(p.data.id)}
             defaultColDef={{ sortable: true, resizable: true }}
             onGridReady={gridInteraction.onGridReady}
@@ -329,7 +327,7 @@ export default function OverdueView({ lookups, active, onOpenInMonth, onDataChan
           lookups={lookups}
           profitMax={profitMax}
           onClose={() => setDrawerId(null)}
-          onRowEdited={() => onMutated()}
+          onRowEdited={(row) => { setRows((prev) => prev.map((r) => r.id === row.id ? row : r)); onMutated(); }}
           onCreated={() => {}} // create mode never opens from this tab
           onOpenRefill={(id, dueDate) => {
             if (rows.some((r) => r.id === id)) {

@@ -21,7 +21,7 @@ import { daysQuiet, loadReqFollowUp } from "../data/refills";
 import type { Lookups, RefillRow } from "../data/types";
 import { confirmDeleteRefill, refillCols, startEditOnClick, useDueDateSort, useRefillCellEdit } from "./refillGrid";
 import { useUndoRefresh } from "./UndoProvider";
-import { RowCtxMenu, type CtxMenuState, type GridCtx } from "./gridParts";
+import { RowCtxMenu, type CtxMenuState } from "./gridParts";
 import { useGridInteraction } from "./GridInteractionProvider";
 import RefillDrawer from "./RefillDrawer";
 import { insuranceDisplayName } from "../lib/rules";
@@ -96,16 +96,14 @@ export default function ReqFollowUpView({ lookups, active, onOpenInMonth, onData
     return max;
   }, [filteredRows]);
 
-  const ctxRef = useRef<GridCtx>({ lookups, profitMax: 0 });
-  ctxRef.current.lookups = lookups;
-  ctxRef.current.profitMax = profitMax;
+  const gridContext = useMemo(() => ({ lookups, profitMax }), [lookups, profitMax]);
 
   useEffect(() => {
     // shading is relative to the visible set; day separators depend on neighbors —
     // both are computed at draw time, so redraw when the visible set changes
     apiRef.current?.refreshCells({ force: true });
     apiRef.current?.redrawRows();
-  }, [filteredRows, profitMax]);
+  }, [filteredRows, profitMax, gridContext]);
 
   // any persisted change: re-sweep/refresh badges upstream and requery — a new
   // call note, Checked Out or MISSED all pull the row off this tab right here
@@ -253,7 +251,7 @@ export default function ReqFollowUpView({ lookups, active, onOpenInMonth, onData
             theme={themeQuartz}
             rowData={filteredRows}
             columnDefs={columnDefs}
-            context={ctxRef.current}
+            context={gridContext}
             getRowId={(p) => String(p.data.id)}
             defaultColDef={{ sortable: true, resizable: true }}
             onGridReady={gridInteraction.onGridReady}
@@ -284,7 +282,7 @@ export default function ReqFollowUpView({ lookups, active, onOpenInMonth, onData
           lookups={lookups}
           profitMax={profitMax}
           onClose={() => setDrawerId(null)}
-          onRowEdited={() => onMutated()}
+          onRowEdited={(row) => { setRows((prev) => prev.map((r) => r.id === row.id ? row : r)); onMutated(); }}
           onCreated={() => {}} // create mode never opens from this tab
           onOpenRefill={(id, dueDate) => {
             if (rows.some((r) => r.id === id)) {

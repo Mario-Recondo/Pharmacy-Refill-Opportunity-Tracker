@@ -11,7 +11,7 @@ import {
 import { loadMonth, loadMonthCounts, loadMonthProfit, setCallListPin, todayIso } from "../data/refills";
 import { STATUSES, type Lookups, type RefillRow, type RefillStatus } from "../data/types";
 import { confirmDeleteRefill, dueLabel, refillCols, startEditOnClick, useDueDateSort, useRefillCellEdit } from "./refillGrid";
-import { RowCtxMenu, type CtxMenuState, type GridCtx } from "./gridParts";
+import { RowCtxMenu, type CtxMenuState } from "./gridParts";
 import { useGridInteraction } from "./GridInteractionProvider";
 import { useUndoRefresh } from "./UndoProvider";
 import OpportunitiesPanel from "./OpportunitiesPanel";
@@ -66,6 +66,7 @@ interface MonthViewProps {
 
 export default function MonthView({ lookups, active, navRequest, onDataChanged, onLookupsChanged }: MonthViewProps) {
   const [ym, setYm] = useState(currentYm);
+  const [seenYm, setSeenYm] = useState(ym);
   const [rows, setRows] = useState<RefillRow[]>([]);
   const [monthProfit, setMonthProfit] = useState(0);
   const [monthCounts, setMonthCounts] = useState<Map<string, number>>(new Map());
@@ -74,6 +75,10 @@ export default function MonthView({ lookups, active, navRequest, onDataChanged, 
   const [drawer, setDrawer] = useState<{ kind: "edit"; id: number } | { kind: "create"; dueDate: string } | null>(null);
   const [importing, setImporting] = useState(false);
   const [ctxMenu, setCtxMenu] = useState<CtxMenuState | null>(null);
+  if (ym !== seenYm) {
+    setSeenYm(ym);
+    setFilters(NO_FILTERS);
+  }
   // row to focus (and maybe open) once its month's rows are loaded — history jumps, due-date moves, fresh creates
   const pendingFocusRef = useRef<{ id: number; open: boolean } | null>(null);
 
@@ -88,7 +93,6 @@ export default function MonthView({ lookups, active, navRequest, onDataChanged, 
   useEffect(() => {
     loadMonth(ym).then(setRows).catch((e) => alert(`Failed to load ${ym}: ${e}`));
     reloadMonthProfit();
-    setFilters(NO_FILTERS);
   }, [ym, reloadMonthProfit]);
 
   useEffect(() => {
@@ -136,16 +140,14 @@ export default function MonthView({ lookups, active, navRequest, onDataChanged, 
     return max;
   }, [filteredRows]);
 
-  const ctxRef = useRef<GridCtx>({ lookups, profitMax: 0 });
-  ctxRef.current.lookups = lookups;
-  ctxRef.current.profitMax = profitMax;
+  const gridContext = useMemo(() => ({ lookups, profitMax }), [lookups, profitMax]);
 
   useEffect(() => {
     // shading is relative to the visible set; day separators depend on neighbors —
     // both are computed at draw time, so redraw when the visible set changes
     apiRef.current?.refreshCells({ force: true });
     apiRef.current?.redrawRows();
-  }, [filteredRows, profitMax]);
+  }, [filteredRows, profitMax, gridContext]);
 
   // ----- detail drawer (M2) --------------------------------------------------
 
@@ -184,8 +186,8 @@ export default function MonthView({ lookups, active, navRequest, onDataChanged, 
     (row: RefillRow, reloadMonth: boolean) => {
       onDataChanged();
       reloadMonthProfit();
+      setRows((prev) => prev.map((r) => r.id === row.id ? row : r));
       if (reloadMonth) reloadAfterMove(row.id, row.due_date, true);
-      else setRows((prev) => [...prev]); // re-derive filters/shading from the mutated row
     },
     [reloadAfterMove, onDataChanged, reloadMonthProfit],
   );
@@ -475,7 +477,7 @@ export default function MonthView({ lookups, active, navRequest, onDataChanged, 
             theme={themeQuartz}
             rowData={filteredRows}
             columnDefs={columnDefs}
-            context={ctxRef.current}
+            context={gridContext}
             getRowId={(p) => String(p.data.id)}
             defaultColDef={{ sortable: true, resizable: true }}
             onGridReady={gridInteraction.onGridReady}
