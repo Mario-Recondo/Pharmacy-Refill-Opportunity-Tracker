@@ -9,7 +9,7 @@ import { autoQualifiesForCallList, isCalledToday, loadCallList, setCallListPin }
 import type { Lookups, RefillRow } from "../data/types";
 import { confirmDeleteRefill, refillCols, startEditOnClick, useDueDateSort, useRefillCellEdit } from "./refillGrid";
 import { useUndoRefresh } from "./UndoProvider";
-import { RowCtxMenu, type CtxMenuState, type GridCtx } from "./gridParts";
+import { RowCtxMenu, type CtxMenuState } from "./gridParts";
 import { useGridInteraction } from "./GridInteractionProvider";
 import RefillDrawer from "./RefillDrawer";
 import { insuranceDisplayName } from "../lib/rules";
@@ -28,6 +28,7 @@ interface Props {
 export default function CallListView({ lookups, active, today, onOpenInMonth, onDataChanged }: Props) {
   const [rows, setRows] = useState<RefillRow[]>([]);
   const [loaded, setLoaded] = useState(false);
+  const [seenLoadKey, setSeenLoadKey] = useState({ active, today });
   const [filters, setFilters] = useState<Filters>(NO_FILTERS);
   const [showSecondary, setShowSecondary] = useState(false);
   const [drawerId, setDrawerId] = useState<number | null>(null);
@@ -36,18 +37,21 @@ export default function CallListView({ lookups, active, today, onOpenInMonth, on
   const gridInteraction = useGridInteraction("calllist", apiRef);
   const { locked, toggleLock, resetSort, onSortChanged } = useDueDateSort(apiRef, { unsortedIsDateOrder: false });
 
-  const load = useCallback(() => {
+  if (active !== seenLoadKey.active || today !== seenLoadKey.today) {
+    setSeenLoadKey({ active, today });
     setLoaded(false);
+  }
+
+  const fetchRows = useCallback(() => {
     loadCallList(today).then((rs) => { setRows(rs); setLoaded(true); }).catch((e) => alert(`Failed to load call list: ${e}`));
   }, [today]);
-  useEffect(() => { if (active) load(); }, [active, load]);
+  const load = useCallback(() => { setLoaded(false); fetchRows(); }, [fetchRows]);
+  useEffect(() => { if (active) fetchRows(); }, [active, fetchRows]);
 
   const filteredRows = useMemo(() => rows.filter((r) => filters.insuranceId === null || r.insurance_id === filters.insuranceId), [rows, filters]);
   const profitMax = useMemo(() => Math.max(0, ...filteredRows.flatMap((r) => [r.old_profit ?? 0, r.new_profit ?? 0])), [filteredRows]);
-  const ctxRef = useRef<GridCtx>({ lookups, profitMax: 0 });
-  ctxRef.current.lookups = lookups;
-  ctxRef.current.profitMax = profitMax;
-  useEffect(() => { apiRef.current?.refreshCells({ force: true }); apiRef.current?.redrawRows(); }, [filteredRows, profitMax, today]);
+  const gridContext = useMemo(() => ({ lookups, profitMax }), [lookups, profitMax]);
+  useEffect(() => { apiRef.current?.refreshCells({ force: true }); apiRef.current?.redrawRows(); }, [filteredRows, profitMax, today, gridContext]);
 
   const onMutated = useCallback(() => { onDataChanged(); load(); }, [onDataChanged, load]);
   // an undo writes straight to the database, so pull the row back in
@@ -112,9 +116,9 @@ export default function CallListView({ lookups, active, today, onOpenInMonth, on
       </div>
     </div>
     {loaded && rows.length === 0 ? <div className="empty-month"><h2>No refills ready to call today</h2><p>Refills show up here the day after they come due. Process them in the Month grid, or right-click a row → Add to today's call list.</p></div> : <div className="grid-wrap">
-      <AgGridReact<RefillRow> theme={themeQuartz} rowData={filteredRows} columnDefs={columnDefs} context={ctxRef.current} getRowId={(p) => String(p.data.id)} defaultColDef={{ sortable: true, resizable: true }} onGridReady={gridInteraction.onGridReady} onGridPreDestroyed={gridInteraction.onGridPreDestroyed} onCellFocused={gridInteraction.onCellFocused} onCellEditingStarted={gridInteraction.onCellEditingStarted} onCellEditingStopped={gridInteraction.onCellEditingStopped} onSortChanged={onSortChanged} onCellClicked={onCellClicked} onCellContextMenu={onCellContextMenu} preventDefaultOnContextMenu={true} onCellValueChanged={onCellValueChanged} getRowClass={getRowClass} suppressStartEditOnTab={true} invalidEditValueMode="revert" tooltipShowDelay={400} overlayNoRowsTemplate="No rows match the active filters" />
+      <AgGridReact<RefillRow> theme={themeQuartz} rowData={filteredRows} columnDefs={columnDefs} context={gridContext} getRowId={(p) => String(p.data.id)} defaultColDef={{ sortable: true, resizable: true }} onGridReady={gridInteraction.onGridReady} onGridPreDestroyed={gridInteraction.onGridPreDestroyed} onCellFocused={gridInteraction.onCellFocused} onCellEditingStarted={gridInteraction.onCellEditingStarted} onCellEditingStopped={gridInteraction.onCellEditingStopped} onSortChanged={onSortChanged} onCellClicked={onCellClicked} onCellContextMenu={onCellContextMenu} preventDefaultOnContextMenu={true} onCellValueChanged={onCellValueChanged} getRowClass={getRowClass} suppressStartEditOnTab={true} invalidEditValueMode="revert" tooltipShowDelay={400} overlayNoRowsTemplate="No rows match the active filters" />
     </div>}
     {ctxMenu && <RowCtxMenu menu={ctxMenu} onDelete={deleteRow} onDismiss={() => setCtxMenu(null)} extraItems={extraItems} />}
-    {editRow && <RefillDrawer key={editRow.id} mode={{ kind: "edit", row: editRow }} lookups={lookups} profitMax={profitMax} onClose={() => setDrawerId(null)} onRowEdited={onMutated} onCreated={() => {}} onOpenRefill={(id, dueDate) => rows.some((r) => r.id === id) ? setDrawerId(id) : (setDrawerId(null), onOpenInMonth(id, dueDate))} onDelete={deleteRow} />}
+    {editRow && <RefillDrawer key={editRow.id} mode={{ kind: "edit", row: editRow }} lookups={lookups} profitMax={profitMax} onClose={() => setDrawerId(null)} onRowEdited={(row) => { setRows((prev) => prev.map((r) => r.id === row.id ? row : r)); onMutated(); }} onCreated={() => {}} onOpenRefill={(id, dueDate) => rows.some((r) => r.id === id) ? setDrawerId(id) : (setDrawerId(null), onOpenInMonth(id, dueDate))} onDelete={deleteRow} />}
   </div>;
 }

@@ -69,7 +69,11 @@ const SECTIONS: { key: SectionKey; label: string }[] = [
 function InlineName({ value, suffix, onCommit }: { value: string; suffix?: string; onCommit: (v: string) => void }) {
   const [editing, setEditing] = useState(false);
   const [text, setText] = useState(value);
-  useEffect(() => setText(value), [value]);
+  const [seen, setSeen] = useState(value);
+  if (value !== seen) {
+    setSeen(value);
+    setText(value);
+  }
   if (!editing) {
     return (
       <span className="s-name" title="Click to rename" onClick={() => setEditing(true)}>
@@ -500,7 +504,11 @@ function NumberSetting({
   prefix?: string;
 }) {
   const [text, setText] = useState(String(value));
-  useEffect(() => setText(String(value)), [value]);
+  const [seen, setSeen] = useState(value);
+  if (value !== seen) {
+    setSeen(value);
+    setText(String(value));
+  }
   const commit = async () => {
     const n = Number(text);
     if (!Number.isFinite(n) || n < min) {
@@ -531,11 +539,13 @@ function NumberSetting({
 function ThresholdsSection({ lookups, onChanged }: SettingsProps) {
   const s = lookups.settings;
   const [tiers, setTiers] = useState<CopayTier[]>(s.copayTiers);
+  const [seenTiers, setSeenTiers] = useState(s.copayTiers);
   const [invalid, setInvalid] = useState(false);
-  useEffect(() => {
+  if (s.copayTiers !== seenTiers) {
+    setSeenTiers(s.copayTiers);
     setTiers(s.copayTiers);
     setInvalid(false);
-  }, [s.copayTiers]);
+  }
 
   /** boundaries must be strictly ascending (grill decision Q9) — invalid edits stay local and unsaved */
   const persistIfValid = async (next: CopayTier[]) => {

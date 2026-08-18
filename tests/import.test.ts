@@ -76,14 +76,14 @@ describe("spreadsheet import planning", () => {
     const db = rawDb(); const insurance = db.prepare("SELECT id FROM insurances LIMIT 1").get() as { id: number };
     db.prepare("INSERT INTO import_aliases (kind,raw_name,target_id) VALUES ('insurance','To Delete',$1)").run({ $1: insurance.id });
     expect(await deleteLookupIfUnused("insurances", insurance.id)).toBe(true);
-    expect((db.prepare("SELECT COUNT(*) AS n FROM import_aliases WHERE target_id=$1").get({ $1: insurance.id }) as any).n).toBe(0);
+    expect((db.prepare("SELECT COUNT(*) AS n FROM import_aliases WHERE target_id=$1").get({ $1: insurance.id }) as { n: number }).n).toBe(0);
   });
 
   it("round-trips both refill counters and preserves non-null human work", () => {
     const db = rawDb(); const id = seedRefill({ rx: "777", due: "2026-07-01", old_profit: 99 });
     db.prepare("UPDATE refills SET refills_filled=1, refills_left=3 WHERE id=$1").run({ $1: id });
     db.prepare("UPDATE refills SET old_copay=COALESCE(old_copay,$1), old_profit=COALESCE(old_profit,$2) WHERE id=$3").run({ $1: 25, $2: 12, $3: id });
-    const row = db.prepare("SELECT refills_filled,refills_left,old_copay,old_profit FROM refills WHERE id=$1").get({ $1: id }) as any;
+    const row = db.prepare("SELECT refills_filled,refills_left,old_copay,old_profit FROM refills WHERE id=$1").get({ $1: id }) as { refills_filled: number; refills_left: number; old_copay: number; old_profit: number };
     expect(row).toMatchObject({ refills_filled: 1, refills_left: 3, old_copay: 25, old_profit: 99 });
   });
 
@@ -91,7 +91,7 @@ describe("spreadsheet import planning", () => {
     const db = rawDb(); seedRefill({ rx: "existing", due: "2026-06-01", drug: "Known Drug" });
     const drug = db.prepare("SELECT id FROM drugs WHERE name='Known Drug'").get() as { id: number };
     await commitImport({ rows: [{ action: "insert", drugId: drug.id, drugName: "Known Drug", finalDue: "2026-07-01", row: { rowIndex: 0, rx_number: "new-1", due_date: "2026-07-01", drug_name: "Known Drug", insurance: null, secondary: null, old_copay: 1, old_profit: 2, refills_left: 3, refills_filled: null, issues: [] } }], aliases: [], columnMapping: { "Rx Number": "rx_number" } });
-    const row = db.prepare("SELECT rx_number,refills_left FROM refills WHERE rx_number='new-1'").get() as any;
+    const row = db.prepare("SELECT rx_number,refills_left FROM refills WHERE rx_number='new-1'").get() as { rx_number: string; refills_left: number };
     expect(row).toMatchObject({ rx_number: "new-1", refills_left: 3 });
   });
 
@@ -110,13 +110,13 @@ describe("spreadsheet import planning", () => {
       aliases: [{ rawName: "VILLAGE RX LOCAL", kind: "insurance", choice: "create", targetName: "Village Rx Local", count: 1 }],
       columnMapping: {},
     });
-    const ins = db.prepare("SELECT id, sort_order FROM insurances WHERE name='Village Rx Local'").get() as any;
-    const maxBefore = db.prepare("SELECT MAX(sort_order) AS m FROM insurances WHERE id != $1").get({ $1: ins.id }) as any;
+    const ins = db.prepare("SELECT id, sort_order FROM insurances WHERE name='Village Rx Local'").get() as { id: number; sort_order: number };
+    const maxBefore = db.prepare("SELECT MAX(sort_order) AS m FROM insurances WHERE id != $1").get({ $1: ins.id }) as { m: number };
     expect(ins.sort_order).toBe(maxBefore.m + 10);
-    const row = db.prepare("SELECT r.insurance_id, d.name AS drug FROM refills r JOIN drugs d ON d.id=r.drug_id WHERE r.rx_number='new-2'").get() as any;
+    const row = db.prepare("SELECT r.insurance_id, d.name AS drug FROM refills r JOIN drugs d ON d.id=r.drug_id WHERE r.rx_number='new-2'").get() as { insurance_id: number; drug: string };
     expect(row.insurance_id).toBe(ins.id);
     expect(row.drug).toBe("Brand New Drug");
-    const alias = db.prepare("SELECT target_id FROM import_aliases WHERE kind='insurance' AND raw_name='VILLAGE RX LOCAL'").get() as any;
+    const alias = db.prepare("SELECT target_id FROM import_aliases WHERE kind='insurance' AND raw_name='VILLAGE RX LOCAL'").get() as { target_id: number };
     expect(alias.target_id).toBe(ins.id);
   });
 
@@ -186,7 +186,7 @@ describe("spreadsheet import planning", () => {
 
   it("rolls back the whole batch: a late failing statement leaves no lookup, drug, or refill", async () => {
     const db = rawDb();
-    const before = db.prepare("SELECT COUNT(*) AS n FROM refills").get() as any;
+    const before = db.prepare("SELECT COUNT(*) AS n FROM refills").get() as { n: number };
     await expect(commitImport({
       rows: [{ action: "insert", drugName: "Doomed Drug", finalDue: "2026-07-06", row: { rowIndex: 0, rx_number: "doomed-1", due_date: "2026-07-06", drug_name: "Doomed Drug", insurance: "DOOMED PLAN", secondary: null, old_copay: 1, old_profit: 2, refills_left: null, refills_filled: null, issues: [] } }],
       // the alias statement violates import_aliases' kind CHECK -> whole batch must roll back
@@ -196,7 +196,7 @@ describe("spreadsheet import planning", () => {
       ],
       columnMapping: {},
     })).rejects.toThrow();
-    expect((db.prepare("SELECT COUNT(*) AS n FROM refills").get() as any).n).toBe(before.n);
+    expect((db.prepare("SELECT COUNT(*) AS n FROM refills").get() as { n: number }).n).toBe(before.n);
     expect(db.prepare("SELECT id FROM insurances WHERE name='Doomed Plan'").get()).toBeUndefined();
     expect(db.prepare("SELECT id FROM drugs WHERE name='Doomed Drug'").get()).toBeUndefined();
     expect(db.prepare("SELECT id FROM import_aliases WHERE raw_name='DOOMED PLAN'").get()).toBeUndefined();
@@ -208,7 +208,7 @@ describe("spreadsheet import planning", () => {
     const row = { rowIndex: 0, rx_number: "stale-2", due_date: "2026-07-04", drug_name: "Adopt Drug", insurance: null, secondary: null, old_copay: null, old_profit: null, refills_left: null, refills_filled: null, issues: [] as string[] };
     await expect(commitImport({ rows: [{ action: "update", adoption: true, existingId: id, expectedDue: "2026-07-01", expectedDrugName: "Adopt Drug", finalDue: "2026-07-04", row }], aliases: [], columnMapping: {} })).rejects.toBeInstanceOf(StaleImportError);
     expect(batchInvocations).toHaveLength(0);
-    expect((db.prepare("SELECT due_date FROM refills WHERE id=$1").get({ $1: id }) as any).due_date).toBe("2026-07-01");
+    expect((db.prepare("SELECT due_date FROM refills WHERE id=$1").get({ $1: id }) as { due_date: string }).due_date).toBe("2026-07-01");
   });
 
   it("rejects a create-new whose name now exists, before execute_batch", async () => {
@@ -289,7 +289,7 @@ describe("spreadsheet import planning", () => {
     db.prepare("UPDATE refills SET insurance_id=$1 WHERE id=$2").run({ $1: ins.id, $2: refillId });
     db.prepare("INSERT INTO import_aliases (kind,raw_name,target_id) VALUES ('insurance','InUse',$1)").run({ $1: ins.id });
     expect(await deleteLookupIfUnused("insurances", ins.id)).toBe(false);
-    expect((db.prepare("SELECT COUNT(*) AS n FROM import_aliases WHERE raw_name='InUse'").get() as any).n).toBe(1);
+    expect((db.prepare("SELECT COUNT(*) AS n FROM import_aliases WHERE raw_name='InUse'").get() as { n: number }).n).toBe(1);
   });
 
   it("round-trips refills_left through the data layer's real row SELECT", async () => {
@@ -375,7 +375,7 @@ describe("spreadsheet import planning", () => {
       aliases: [{ rawName: "X", kind: "bogus" as never, choice: "blank", count: 1 }], // late CHECK failure
       columnMapping: { marker: "should-not-persist" },
     })).rejects.toThrow();
-    expect((db.prepare("SELECT old_profit FROM refills WHERE id=$1").get({ $1: id }) as any).old_profit).toBeNull(); // earlier UPDATE reverted
+    expect((db.prepare("SELECT old_profit FROM refills WHERE id=$1").get({ $1: id }) as { old_profit: number | null }).old_profit).toBeNull(); // earlier UPDATE reverted
     // the failing alias statement precedes the settings statement in the batch,
     // so this proves the mapping was NEVER WRITTEN (nothing after a failure runs);
     // the settings statement is always last, so no failure can follow it
@@ -419,8 +419,8 @@ describe("spreadsheet import planning", () => {
       ],
       columnMapping: {},
     });
-    const a = db.prepare("SELECT sort_order FROM insurances WHERE name='First New'").get() as any;
-    const b = db.prepare("SELECT sort_order FROM insurances WHERE name='Second New'").get() as any;
+    const a = db.prepare("SELECT sort_order FROM insurances WHERE name='First New'").get() as { sort_order: number };
+    const b = db.prepare("SELECT sort_order FROM insurances WHERE name='Second New'").get() as { sort_order: number };
     expect(b.sort_order).toBe(a.sort_order + 10);
   });
 
@@ -428,11 +428,11 @@ describe("spreadsheet import planning", () => {
     // the statement shape commitImport emits; commitImport itself can never
     // retarget (the stale guard blocks alias drift), so prove the SQL directly
     const db = rawDb();
-    const [i1, i2] = db.prepare("SELECT id FROM insurances LIMIT 2").all() as any[];
+    const [i1, i2] = db.prepare("SELECT id FROM insurances LIMIT 2").all() as { id: number }[];
     const upsert = db.prepare("INSERT INTO import_aliases (kind,raw_name,target_id) VALUES ($1,$2,$3) ON CONFLICT(kind,raw_name) DO UPDATE SET target_id=excluded.target_id");
     upsert.run({ $1: "insurance", $2: "Retarget", $3: i1.id });
     upsert.run({ $1: "insurance", $2: "RETARGET", $3: i2.id });
-    const rows = db.prepare("SELECT raw_name, target_id FROM import_aliases WHERE raw_name='Retarget'").all() as any[];
+    const rows = db.prepare("SELECT raw_name, target_id FROM import_aliases WHERE raw_name='Retarget'").all() as { raw_name: string; target_id: number }[];
     expect(rows).toHaveLength(1);
     expect(rows[0].target_id).toBe(i2.id);
   });
@@ -444,10 +444,10 @@ describe("spreadsheet import planning", () => {
     const refillId = seedRefill({ rx: "sec-1", due: "2026-07-01" });
     db.prepare("UPDATE refills SET secondary_id=$1 WHERE id=$2").run({ $1: sec.id, $2: refillId });
     expect(await deleteLookupIfUnused("secondary_coverages", sec.id)).toBe(false); // in use → refused
-    expect((db.prepare("SELECT COUNT(*) AS n FROM import_aliases WHERE raw_name='SecAlias'").get() as any).n).toBe(1);
+    expect((db.prepare("SELECT COUNT(*) AS n FROM import_aliases WHERE raw_name='SecAlias'").get() as { n: number }).n).toBe(1);
     db.prepare("UPDATE refills SET secondary_id=NULL WHERE id=$1").run({ $1: refillId });
     expect(await deleteLookupIfUnused("secondary_coverages", sec.id)).toBe(true);
-    expect((db.prepare("SELECT COUNT(*) AS n FROM import_aliases WHERE raw_name='SecAlias'").get() as any).n).toBe(0);
+    expect((db.prepare("SELECT COUNT(*) AS n FROM import_aliases WHERE raw_name='SecAlias'").get() as { n: number }).n).toBe(0);
   });
 
   it("stale (a): a row now occupies a planned insert's (rx, due)", async () => {
@@ -489,7 +489,7 @@ describe("spreadsheet import planning", () => {
 
   it("stale (h): a remembered alias changed after preview", async () => {
     const db = rawDb();
-    const [i1, i2] = db.prepare("SELECT id FROM insurances LIMIT 2").all() as any[];
+    const [i1, i2] = db.prepare("SELECT id FROM insurances LIMIT 2").all() as { id: number }[];
     // preview believed "Drifted" was blank; someone mapped it meanwhile
     db.prepare("INSERT INTO import_aliases (kind,raw_name,target_id) VALUES ('insurance','Drifted',$1)").run({ $1: i1.id });
     resetBatchInvocations();
@@ -504,6 +504,6 @@ describe("spreadsheet import planning", () => {
     const row = { rowIndex: 0, rx_number: "stale-1", due_date: "2026-07-02", drug_name: "Stale Drug", insurance: null, secondary: null, old_copay: 1, old_profit: 2, refills_left: null, refills_filled: null, issues: [] as string[] };
     db.prepare("UPDATE refills SET due_date='2026-07-03' WHERE id=$1").run({ $1: id }); resetBatchInvocations();
     await expect(commitImport({ rows: [{ action: "update", existingId: id, expectedDue: "2026-07-01", finalDue: "2026-07-02", expectedDrugName: "Stale Drug", expectedStatus: "Pending", row }], aliases: [], columnMapping: {} })).rejects.toBeInstanceOf(StaleImportError);
-    expect(batchInvocations).toHaveLength(0); expect((db.prepare("SELECT due_date FROM refills WHERE id=$1").get({ $1: id }) as any).due_date).toBe("2026-07-03");
+    expect(batchInvocations).toHaveLength(0); expect((db.prepare("SELECT due_date FROM refills WHERE id=$1").get({ $1: id }) as { due_date: string }).due_date).toBe("2026-07-03");
   });
 });
