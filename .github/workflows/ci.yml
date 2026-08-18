@@ -43,6 +43,9 @@ jobs:
       - name: Install JavaScript dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Lint frontend (ESLint)
+        run: pnpm lint
+
       - name: Test migration guard
         run: pnpm test:migration-guard
 
