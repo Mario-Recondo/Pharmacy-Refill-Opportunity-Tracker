@@ -4,6 +4,7 @@ version = "1.2.3"
 description = "Prescription refill tracker for an independent pharmacy: refills due, contact attempts, copays and verified profits"
 authors = ["Mario Recondo"]
 edition = "2021"
+license = "MIT"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
